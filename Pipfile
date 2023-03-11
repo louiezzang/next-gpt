@@ -1,0 +1,19 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+numpy = "*"
+tqdm = "*"
+torch = "*"
+transformers = "*"
+datasets = "*"
+tiktoken = "*"
+wandb = "*"
+
+[dev-packages]
+ipykernel = "*"
+
+[requires]
+python_version = "*"
