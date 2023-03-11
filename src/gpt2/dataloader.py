@@ -21,8 +21,6 @@ class GPTDataloader(object):
         self.val_batch_size = args.val_batch_size if hasattr(args, "val_batch_size") else self.train_batch_size
         self.test_batch_size = args.test_batch_size if hasattr(args, "test_batch_size") else self.train_batch_size
 
-        seed = args.dataloader_random_seed if hasattr(args, "dataloader_random_seed") else 1
-        self.rng = random.Random(seed)
         self.drop_last = args.drop_last if hasattr(args, "drop_last") else False
 
     @staticmethod

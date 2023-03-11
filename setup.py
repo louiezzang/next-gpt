@@ -18,6 +18,7 @@ setup_requires = [
 ]
 
 dependency_links = [
+    # "https://download.pytorch.org/whl/nightly/cu116" # For PyTorch2.0
 ]
 
 setup(

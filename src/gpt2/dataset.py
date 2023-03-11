@@ -19,7 +19,7 @@ class GPTDataset(Dataset):
         self.train = train
 
     def __len__(self):
-        return len(self.item_seq)
+        return len(self.seq_list)
 
     def __getitem__(self, index):
         seq = self.seq_list[index]

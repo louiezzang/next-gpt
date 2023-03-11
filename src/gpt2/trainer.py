@@ -21,36 +21,45 @@ from .model import GPTConfig, GPT
 
 
 class GPTTrainer(object):
-    def __init__(self, args, dataloader, device_type, init_from="scratch", checkpoint=None, logger=None):
+    def __init__(self, args, dataloader, device, init_from="scratch", checkpoint=None, logger=None):
         """
         Constructor.
 
         Args:
             args: The arguments
             dataloader: The dataloader
-            device_type: 'cpu' or 'gpu'
+            device: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
             init_from: The model initialization option ('scratch', 'resume', or 'gpt2...')
             checkpoint: The checkpoint dict when resumes training from a checkpoint
             logger: The model logger which is `ModelLogger` object
         """
         self.args = args
+        print(f"args: {vars(args)}")
         self.dataloader = dataloader
-        self.device_type = device_type
         self.init_from = init_from
         self.checkpoint = checkpoint
         self.logger = logger
         self.num_epochs = args.num_epochs
-        self.running_mfu = -1.0  # model flops(floating point operations per second) utilization (MFU)
 
         # Data
         self.gradient_accumulation_steps = 5  # used to simulate larger batch sizes
 
         # Model
+        self.vocab_size = args.vocab_size if hasattr(args, "vocab_size") else None
         self.block_size = self.args.block_size if hasattr(args, "block_size") else 1024
+        self.compile = self.args.compile if hasattr(args, "compile") else False
         self.model, self.model_args = self.__init_model()
 
+        # Init these up here, can override if init_from='resume' (i.e. from a checkpoint)
+        self.start_epoch_num = 0
+        self.best_val_loss = 1e9 
+        self.always_save_checkpoint = self.args.always_save_checkpoint if hasattr(args, "always_save_checkpoint") else True
+
+        # Print the number of parameters in the model.
+        # print(f"number of parameters: {sum(p.numel() for p in self.model.parameters())/1e6}M")
+
         # Compile the model.
-        if compile:
+        if self.compile is True:
             print("compiling the model... (takes a ~minute)")
             unoptimized_model = self.model
             self.model = torch.compile(self.model) # requires PyTorch 2.0
@@ -69,7 +78,7 @@ class GPTTrainer(object):
         self.min_lr = self.args.min_lr if hasattr(args, "min_lr") else 6e-5 # minimum learning rate, should be ~= learning_rate/10 per Chinchilla
 
         # System
-        self.dtype = "bfloat16" # "float32", "bfloat16", or "float16", the latter will auto implement a GradScaler
+        self.dtype = self.args.dtype if hasattr(args, "dtype") else "bfloat16" # "float32", "bfloat16", or "float16", the latter will auto implement a GradScaler
         self.compile = self.args.compile if hasattr(args, "compile") else True # use PyTorch 2.0 to compile the model to be faster
 
         # Compile the model.
@@ -82,13 +91,13 @@ class GPTTrainer(object):
         self.scaler = torch.cuda.amp.GradScaler(enabled=(self.dtype == "float16"))
 
         # Optimizer
-        self.optimizer = self.model.configure_optimizers(weight_decay, self.lr, (beta1, beta2), device_type)
+        device_type = "cuda" if "cuda" in device else "cpu"
+        self.model.to(device)
+        self.optimizer = self.model.configure_optimizers(weight_decay, self.lr, (beta1, beta2), device_type=device_type)
         if init_from == "resume":
             self.optimizer.load_state_dict(checkpoint["optimizer"])
     
     def __init_model(self):
-        meta_vocab_size = None
-
         # Model init.
         all_args = vars(self.args) # Convert Namespace to dict
         model_args = dict()
@@ -101,10 +110,12 @@ class GPTTrainer(object):
             # Init a new model from scratch
             print("Initializing a new model from scratch")
             # Determine the vocab size we'll use for from-scratch training
-            if meta_vocab_size is None:
+            if self.vocab_size is None:
                 print("Defaulting to vocab_size of GPT-2 to 50304 (50257 rounded up for efficiency)")
+                self.vocab_size = 50304
+                self.args.vocab_size = 50304
             
-            model_args["vocab_size"] = meta_vocab_size if meta_vocab_size is not None else 50304
+            model_args["vocab_size"] = self.vocab_size
             gptconf = GPTConfig(**model_args)
             model = GPT(gptconf)
         elif self.init_from == "resume":
@@ -128,8 +139,8 @@ class GPTTrainer(object):
                 if k.startswith(unwanted_prefix):
                     state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
             model.load_state_dict(state_dict)
-            epoch_num = checkpoint["epoch"]
-            best_val_loss = checkpoint["best_val_loss"]
+            self.start_epoch_num = checkpoint["epoch"]
+            self.best_val_loss = checkpoint["best_val_loss"]
         elif self.init_from.startswith("gpt2"):
             print(f"Initializing from OpenAI GPT-2 weights: {self.init_from}")
             # Initialize from OpenAI GPT-2 weights.
@@ -199,7 +210,7 @@ class GPTTrainer(object):
 
         print("=== Destroyed torch.multiprocessing group! ===")
 
-    def run(self, n_gpus, distributed=False, distributed_backend="gloo", enable_tqdm=False):
+    def run(self, n_gpus, distributed=False, distributed_backend="nccl", enable_tqdm=False):
         """
         Runs the training process.
 
@@ -229,11 +240,12 @@ class GPTTrainer(object):
     def train(self, rank, world_size, distributed=False, distributed_backend="nccl", enable_tqdm=False):
         if distributed:
             self.init_process(rank, world_size, distributed_backend)
+            device = f"cuda:{rank}"
+            torch.cuda.set_device(device)
             seed_offset = rank # Each process gets a different seed
         else:
             seed_offset = 0
             self.gradient_accumulation_steps *= 8 # simulate 8 gpus
-
 
         torch.manual_seed(1337 + seed_offset)
         torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
@@ -256,7 +268,9 @@ class GPTTrainer(object):
             # self.model = DistributedDataParallel(self.model, device_ids=[rank], find_unused_parameters=True)
             self.model = DistributedDataParallel(self.model, device_ids=[rank])
 
-        for epoch in range(self.num_epochs):
+        self.t0 = time.time()
+        self.running_mfu = -1.0  # model flops(floating point operations per second) utilization (MFU)
+        for epoch in range(self.start_epoch_num, self.num_epochs):
             self.train_one_epoch(epoch, rank, world_size, train_loader, distributed, ctx, enable_tqdm=enable_tqdm)
             if val_loader is not None:
                 self.validate(epoch, rank, world_size, val_loader, distributed, ctx, enable_tqdm=enable_tqdm)
@@ -267,8 +281,8 @@ class GPTTrainer(object):
         self.model.train()
         raw_model = self.model.module if distributed else self.model # Unwrap DDP container if needed
 
-        # determine and set the learning rate for this iteration
-        lr = self.get_epoch_lr(epoch) if self.decay_lr else self.lr
+        # Determine and set the learning rate for this iteration.
+        lr = self.__get_epoch_lr(epoch) if self.decay_lr else self.lr
         for param_group in self.optimizer.param_groups:
             param_group["lr"] = lr
 
@@ -287,7 +301,7 @@ class GPTTrainer(object):
                 # Pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
                 X, Y = X.pin_memory().to(device, non_blocking=True), Y.pin_memory().to(device, non_blocking=True)
 
-            # forward backward update, with optional gradient accumulation to simulate larger batch size
+            # Forward backward update, with optional gradient accumulation to simulate larger batch size
             # and using the GradScaler if data type is float16
             for micro_step in range(self.gradient_accumulation_steps):
                 if distributed:
@@ -312,42 +326,42 @@ class GPTTrainer(object):
             # Flush the gradients as soon as we can, no need for this memory anymore.
             self.optimizer.zero_grad(set_to_none=True)
 
-            average_meter_set.update("train_loss", loss.item())
+            lossf = loss.item() # loss as float. note: this is a CPU-GPU sync point
+            average_meter_set.update("train_loss", lossf)
 
+            # timing and logging
+            t1 = time.time()
+            dt = t1 - self.t0
+            self.t0 = t1
             if rank == 0:
+                if epoch >= 5: # let the training loop settle a bit
+                    mfu = raw_model.estimate_mfu(batch_size * self.gradient_accumulation_steps, dt)
+                    running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
                 progress = ((batch_idx + 1) / total_batch_size) * 100
                 if enable_tqdm:
-                    description = "Epoch {}, train_loss {:.3f}, lr {} ".format(epoch, average_meter_set["train_loss"].avg, self.get_lr())
+                    description = "Epoch {}, train_loss {:.4f}, lr {}, mfu {:.2f}% ".format(
+                        epoch, average_meter_set["train_loss"].avg, self.__get_lr(), running_mfu*100)
                     tqdm_dataloader.set_description(description)
-                    # tqdm_dataloader.set_postfix(epoch=epoch + 1, train_loss=average_meter_set["train_loss"].avg, lr=self.get_lr())
                 elif (logging_per_every > 0 and batch_idx % logging_per_every == 0) or batch_idx == total_batch_size - 1:
-                    description = "Epoch {}, train_loss {:.3f}, lr{} :  {:.0f}% | {:d}/{:d}" \
-                        .format(epoch, average_meter_set["train_loss"].avg, self.get_lr(), progress, batch_idx+1, total_batch_size)
+                    description = "Epoch {}, train_loss {:.4f}, lr {} mfu {:.2f}%:  {:.0f}% | {:d}/{:d}".format(
+                        epoch, average_meter_set["train_loss"].avg, self.__get_lr(), progress, batch_idx+1, total_batch_size)
                     print(description)
 
         # Save checkpoint.
         if self.logger and rank == 0:
             self.logger.log_metrics(average_meter_set.averages(), epoch)
-            if epoch > 0:
-                state_dict = {
-                    "model_state_dict": self.model.state_dict(),
-                    "optimizer": self.optimizer.state_dict(),
-                    "model_args": vars(self.args),
-                    "epoch": epoch
-                }
-                self.logger.save_checkpoint(epoch=epoch, state_dict=state_dict)
 
     @torch.no_grad()
     def validate(self, epoch, rank, world_size, dataloader, distributed, ctx, print_interval=10, enable_tqdm=False):
         device = rank if world_size > 0 else "cpu"
         self.model.eval()
+        raw_model = self.model.module if distributed else self.model # Unwrap DDP container if needed
 
         average_meter_set = AverageMeterSet()
 
         total_batch_size = len(dataloader)
         logging_per_every = total_batch_size // print_interval
 
-        # tqdm_dataloader = tqdm(dataloader, file=sys.stdout) if enable_tqdm else None
         tqdm_dataloader = tqdm(dataloader) if enable_tqdm else None
         for batch_idx, batch in enumerate(tqdm_dataloader if enable_tqdm else dataloader):
             X, Y = batch
@@ -362,18 +376,16 @@ class GPTTrainer(object):
             with ctx:
                 logits, loss = self.model(X, Y)
  
-            average_meter_set.update("val_loss", loss.item())
+            lossf = loss.item() # loss as float. note: this is a CPU-GPU sync point
+            average_meter_set.update("val_loss", lossf)
 
             if rank == 0:
                 progress = ((batch_idx + 1) / total_batch_size) * 100
                 if enable_tqdm:
-                    description = "Epoch {}, Val: loss {:.3f}".format(
-                        epoch,
-                        average_meter_set["val_loss"].avg)
+                    description = "Epoch {}, Val: loss {:.4f}".format(epoch, average_meter_set["val_loss"].avg)
                     tqdm_dataloader.set_description(description)
-                    # tqdm_dataloader.set_postfix(epoch=epoch + 1, val_loss=average_meter_set["val_loss"].avg)
                 elif (logging_per_every > 0 and batch_idx % logging_per_every == 0) or batch_idx == total_batch_size - 1:
-                    description = "Epoch {}, Val: loss {:.3f}:  {:.0f}% | {:d}/{:d}".format(
+                    description = "Epoch {}, Val: loss {:.4f}:  {:.0f}% | {:d}/{:d}".format(
                         epoch,
                         average_meter_set["val_loss"].avg,
                         progress,
@@ -383,6 +395,17 @@ class GPTTrainer(object):
 
         if self.logger and rank == 0:
             self.logger.log_metrics(average_meter_set.averages(), epoch)
+            if average_meter_set["val_loss"].avg < self.best_val_loss or self.always_save_checkpoint:
+                self.best_val_loss = average_meter_set["val_loss"].avg
+                if epoch > 0:
+                    state_dict = {
+                        "model_state_dict": raw_model.state_dict(),
+                        "optimizer": self.optimizer.state_dict(),
+                        "model_args": vars(self.args),
+                        "epoch": epoch,
+                        "best_val_loss": self.best_val_loss,
+                    }
+                    self.logger.save_checkpoint(epoch=epoch, state_dict=state_dict)
 
 
 class AverageMeterSet(object):
