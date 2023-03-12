@@ -47,7 +47,6 @@ class GPTTrainer(object):
         # Model
         self.vocab_size = args.vocab_size if hasattr(args, "vocab_size") else None
         self.block_size = self.args.block_size if hasattr(args, "block_size") else 1024
-        self.compile = self.args.compile if hasattr(args, "compile") else False
         self.model, self.model_args = self.__init_model()
 
         # Init these up here, can override if init_from='resume' (i.e. from a checkpoint)
@@ -57,12 +56,6 @@ class GPTTrainer(object):
 
         # Print the number of parameters in the model.
         # print(f"number of parameters: {sum(p.numel() for p in self.model.parameters())/1e6}M")
-
-        # Compile the model.
-        if self.compile is True:
-            print("compiling the model... (takes a ~minute)")
-            unoptimized_model = self.model
-            self.model = torch.compile(self.model) # requires PyTorch 2.0
 
         # Adamw optimizer
         self.lr = self.args.lr if hasattr(args, "lr") else 6e-4
@@ -79,23 +72,23 @@ class GPTTrainer(object):
 
         # System
         self.dtype = self.args.dtype if hasattr(args, "dtype") else "bfloat16" # "float32", "bfloat16", or "float16", the latter will auto implement a GradScaler
-        self.compile = self.args.compile if hasattr(args, "compile") else True # use PyTorch 2.0 to compile the model to be faster
+        self.compile = self.args.compile if hasattr(args, "compile") else False # use PyTorch 2.0 to compile the model to be faster
+        
+        # Initialize a GradScaler. If enabled=False scaler is a no-op
+        self.scaler = torch.cuda.amp.GradScaler(enabled=(self.dtype == "float16"))
+
+        # Optimizer
+        device_type = "cuda" if "cuda" in str(device) else "cpu"
+        self.model.to(device)
+        self.optimizer = self.model.configure_optimizers(weight_decay, self.lr, (beta1, beta2), device_type=device_type)
+        if init_from == "resume":
+            self.optimizer.load_state_dict(checkpoint["optimizer"])
 
         # Compile the model.
         if self.compile:
             print("compiling the model... (takes a ~minute)")
             self.unoptimized_model = self.model
             self.model = torch.compile(self.model) # requires PyTorch 2.0
-        
-        # Initialize a GradScaler. If enabled=False scaler is a no-op
-        self.scaler = torch.cuda.amp.GradScaler(enabled=(self.dtype == "float16"))
-
-        # Optimizer
-        device_type = "cuda" if "cuda" in device else "cpu"
-        self.model.to(device)
-        self.optimizer = self.model.configure_optimizers(weight_decay, self.lr, (beta1, beta2), device_type=device_type)
-        if init_from == "resume":
-            self.optimizer.load_state_dict(checkpoint["optimizer"])
     
     def __init_model(self):
         # Model init.
@@ -241,7 +234,7 @@ class GPTTrainer(object):
         if distributed:
             self.init_process(rank, world_size, distributed_backend)
             device = f"cuda:{rank}"
-            torch.cuda.set_device(device)
+            torch.cuda.set_device(device) # no need this?
             seed_offset = rank # Each process gets a different seed
         else:
             seed_offset = 0
@@ -250,8 +243,8 @@ class GPTTrainer(object):
         torch.manual_seed(1337 + seed_offset)
         torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
         torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
-        #device_type = "cuda" if world_size > 0 else "cpu" # for later use in torch.autocast
-        device_type = self.device_type
+        device_type = "cuda" if world_size > 0 else "cpu" # for later use in torch.autocast
+
         # note: float16 data type will automatically use a GradScaler
         ptdtype = {"float32": torch.float32, "bfloat16": torch.bfloat16, "float16": torch.float16}[self.dtype]
         ctx = nullcontext() if device_type == "cpu" else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
@@ -334,16 +327,15 @@ class GPTTrainer(object):
             dt = t1 - self.t0
             self.t0 = t1
             if rank == 0:
-                if epoch >= 5: # let the training loop settle a bit
-                    mfu = raw_model.estimate_mfu(batch_size * self.gradient_accumulation_steps, dt)
-                    running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
+                mfu = raw_model.estimate_mfu(batch_size * self.gradient_accumulation_steps, dt)
+                self.running_mfu = mfu if self.running_mfu == -1.0 else 0.9*self.running_mfu + 0.1*mfu
                 progress = ((batch_idx + 1) / total_batch_size) * 100
                 if enable_tqdm:
-                    description = "Epoch {}, train_loss {:.4f}, lr {}, mfu {:.2f}% ".format(
-                        epoch, average_meter_set["train_loss"].avg, self.__get_lr(), running_mfu*100)
+                    description = "Epoch {}, train: loss {:.4f}, lr {}, mfu {:.2f}% ".format(
+                        epoch, average_meter_set["train_loss"].avg, self.__get_lr(), self.running_mfu*100)
                     tqdm_dataloader.set_description(description)
                 elif (logging_per_every > 0 and batch_idx % logging_per_every == 0) or batch_idx == total_batch_size - 1:
-                    description = "Epoch {}, train_loss {:.4f}, lr {} mfu {:.2f}%:  {:.0f}% | {:d}/{:d}".format(
+                    description = "Epoch {}, train: loss {:.4f}, lr {} mfu {:.2f}%:  {:.0f}% | {:d}/{:d}".format(
                         epoch, average_meter_set["train_loss"].avg, self.__get_lr(), progress, batch_idx+1, total_batch_size)
                     print(description)
 
@@ -382,10 +374,11 @@ class GPTTrainer(object):
             if rank == 0:
                 progress = ((batch_idx + 1) / total_batch_size) * 100
                 if enable_tqdm:
-                    description = "Epoch {}, Val: loss {:.4f}".format(epoch, average_meter_set["val_loss"].avg)
+                    description = "Epoch {}, val: loss {:.4f}".format(
+                        epoch, average_meter_set["val_loss"].avg)
                     tqdm_dataloader.set_description(description)
                 elif (logging_per_every > 0 and batch_idx % logging_per_every == 0) or batch_idx == total_batch_size - 1:
-                    description = "Epoch {}, Val: loss {:.4f}:  {:.0f}% | {:d}/{:d}".format(
+                    description = "Epoch {}, val: loss {:.4f}:  {:.0f}% | {:d}/{:d}".format(
                         epoch,
                         average_meter_set["val_loss"].avg,
                         progress,
