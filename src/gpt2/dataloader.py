@@ -4,6 +4,7 @@ Pytorch DataLoader for GPT dataset.
 @author Younggue Bae
 """
 import random
+import numpy as np
 import torch
 from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
@@ -12,12 +13,12 @@ from torch.utils.data.distributed import DistributedSampler
 class GPTDataloader(object):
     def __init__(self, args, dataset, collate_fn=None):
         self.args = args
-        self.train = dataset["train"]  # Mandatory for training
+        self.train = dataset["train"] if "train" in dataset else None  # Optional
         self.val = dataset["val"] if "val" in dataset else None  # Optional
         self.test = dataset["test"] if "test" in dataset else None  # Optional
         self.collate_fn = collate_fn if collate_fn else self.default_collate_fn
 
-        self.train_batch_size = args.train_batch_size  # Mandatory for training
+        self.train_batch_size = args.train_batch_size if hasattr(args, "train_batch_size") else 12
         self.val_batch_size = args.val_batch_size if hasattr(args, "val_batch_size") else self.train_batch_size
         self.test_batch_size = args.test_batch_size if hasattr(args, "test_batch_size") else self.train_batch_size
 
@@ -81,3 +82,30 @@ class GPTDataloader(object):
                                     drop_last=self.drop_last)
         return dataloader
 
+
+
+class GPTRandomAccessDataloader(object):
+    def __init__(self, dataset, block_size, batch_size, meta=None):
+        """
+        Random access data loader from the entire dataset.
+
+        Args:
+            dataset (dict): The dataset which contains the entire ids from source data(key: train_ids, val_ids)
+            block_size (int): The block size (eg. max token length)
+            batch_size (int): The batch size
+            meta (dict, optional): The extra metadata (eg. vocab_size, itos, stoi). Defaults to None.
+        """
+        self.train_ids = dataset["train_ids"] if "train_ids" in dataset else None
+        self.val_ids = dataset["val_ids"] if "val_ids" in dataset else None
+
+        self.block_size = block_size
+        self.batch_size = batch_size
+        self.meta = meta
+
+    def get_batch(self, split):
+        data = self.train_ids if split == "train" else self.val_ids
+        ix = torch.randint(len(data) - self.block_size, (self.batch_size,))
+        x = torch.stack([torch.from_numpy((data[i:i+self.block_size]).astype(np.int64)) for i in ix])
+        y = torch.stack([torch.from_numpy((data[i+1:i+1+self.block_size]).astype(np.int64)) for i in ix])
+        
+        return x, y
