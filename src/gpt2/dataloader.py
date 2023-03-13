@@ -113,6 +113,10 @@ class GPTRandomSampleDataloader(object):
         if (self.train is not None and isinstance(self.train, (list, np.ndarray, np.generic))) or \
             (self.val is not None and isinstance(self.val, (list, np.ndarray, np.generic))):
             self.dataset_type = "list"
+            if self.train is not None and isinstance(self.train, (list)):
+                self.train = np.array(self.train, dtype=np.uint16)
+            if self.val is not None and isinstance(self.val, (list)):
+                self.val = np.array(self.val, dtype=np.uint16)
         elif (self.train is not None and isinstance(self.train, Dataset)) or \
             (self.val is not None and isinstance(self.val, Dataset)):
             self.dataset_type = "dataset"
@@ -126,9 +130,6 @@ class GPTRandomSampleDataloader(object):
     def get_batch(self, split):
         if self.dataset_type == "list":
             data = self.train if split == "train" else self.val
-            if isinstance(data, (list)):
-                data = np.array(data, dtype=np.uint16)
-
             ix = torch.randint(len(data) - self.block_size, (self.batch_size,))
             x = torch.stack([torch.from_numpy((data[i:i+self.block_size]).astype(np.int64)) for i in ix])
             y = torch.stack([torch.from_numpy((data[i+1:i+1+self.block_size]).astype(np.int64)) for i in ix])

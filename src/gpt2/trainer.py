@@ -241,13 +241,19 @@ class GPTTrainer(object):
             torch.cuda.set_device(device) # no need this?
             seed_offset = rank # Each process gets a different seed
         else:
+            if world_size > 0:
+                device = "cuda"
+            else:
+                device = "cpu"
             seed_offset = 0
-            self.gradient_accumulation_steps *= 8 # simulate 8 gpus
+            self.gradient_accumulation_steps *= world_size # simulate n gpus (eg. 8)
 
         torch.manual_seed(1337 + seed_offset)
         torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
         torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
         device_type = "cuda" if world_size > 0 else "cpu" # for later use in torch.autocast
+
+        print(f"device: {device}, device_type: {device_type}")
 
         # note: float16 data type will automatically use a GradScaler
         ptdtype = {"float32": torch.float32, "bfloat16": torch.bfloat16, "float16": torch.float16}[self.dtype]
@@ -256,10 +262,7 @@ class GPTTrainer(object):
         # Get data loader.
         train_loader, val_loader, test_loader = self.dataloader.get_pytorch_dataloaders(rank, world_size)
 
-        if world_size > 0:
-            self.model = self.model.to(rank)
-        else:
-            self.model = self.model.to("cpu")
+        self.model = self.model.to(device)
 
         if distributed:
             # self.model = DistributedDataParallel(self.model, device_ids=[rank], find_unused_parameters=True)
@@ -268,13 +271,12 @@ class GPTTrainer(object):
         self.t0 = time.time()
         self.running_mfu = -1.0  # model flops(floating point operations per second) utilization (MFU)
         for epoch in range(self.start_epoch_num, self.num_epochs):
-            self.train_one_epoch(epoch, rank, world_size, train_loader, distributed, ctx, enable_tqdm=enable_tqdm)
+            self.train_one_epoch(epoch, rank, world_size, device, train_loader, distributed, ctx, enable_tqdm=enable_tqdm)
             if val_loader is not None:
-                self.validate(epoch, rank, world_size, val_loader, distributed, ctx, enable_tqdm=enable_tqdm)
+                self.validate(epoch, rank, world_size, device, val_loader, distributed, ctx, enable_tqdm=enable_tqdm)
 
  
-    def train_one_epoch(self, epoch, rank, world_size, dataloader, distributed, ctx, enable_tqdm=False):
-        device = rank if world_size > 0 else "cpu"
+    def train_one_epoch(self, epoch, rank, world_size, device, dataloader, distributed, ctx, enable_tqdm=False):
         self.model.train()
         raw_model = self.model.module if distributed else self.model # Unwrap DDP container if needed
 
@@ -348,8 +350,7 @@ class GPTTrainer(object):
             self.logger.log_metrics(average_meter_set.averages(), epoch)
 
     @torch.no_grad()
-    def validate(self, epoch, rank, world_size, dataloader, distributed, ctx, enable_tqdm=False):
-        device = rank if world_size > 0 else "cpu"
+    def validate(self, epoch, rank, world_size, device, dataloader, distributed, ctx, enable_tqdm=False):
         self.model.eval()
         raw_model = self.model.module if distributed else self.model # Unwrap DDP container if needed
 
@@ -417,13 +418,19 @@ class GPTRandomSampleTrainer(GPTTrainer):
             torch.cuda.set_device(device) # no need this?
             seed_offset = rank # Each process gets a different seed
         else:
+            if world_size > 0:
+                device = "cuda"
+            else:
+                device = "cpu"
             seed_offset = 0
-            self.gradient_accumulation_steps *= 8 # simulate 8 gpus
+            self.gradient_accumulation_steps *= world_size # simulate n gpus (eg. 8)
 
         torch.manual_seed(1337 + seed_offset)
         torch.backends.cuda.matmul.allow_tf32 = True  # allow tf32 on matmul
         torch.backends.cudnn.allow_tf32 = True # allow tf32 on cudnn
         device_type = "cuda" if world_size > 0 else "cpu" # for later use in torch.autocast
+
+        print(f"device: {device}, device_type: {device_type}")
 
         # note: float16 data type will automatically use a GradScaler
         ptdtype = {"float32": torch.float32, "bfloat16": torch.bfloat16, "float16": torch.float16}[self.dtype]
@@ -431,10 +438,7 @@ class GPTRandomSampleTrainer(GPTTrainer):
 
         dataloader = self.dataloader # Note that this is GPTRandomSampleDataloader!
 
-        if world_size > 0:
-            self.model = self.model.to(rank)
-        else:
-            self.model = self.model.to("cpu")
+        self.model = self.model.to(device)
 
         if distributed:
             # self.model = DistributedDataParallel(self.model, device_ids=[rank], find_unused_parameters=True)
@@ -444,8 +448,10 @@ class GPTRandomSampleTrainer(GPTTrainer):
 
         t0 = time.time()
         running_mfu = -1.0  # model flops(floating point operations per second) utilization (MFU)
-        for epoch in range(self.start_epoch_num, self.num_epochs):
-            train_loss = self.train_one_epoch(epoch, rank, world_size, dataloader, distributed, ctx)
+        epochs = range(self.start_epoch_num, self.num_epochs)
+        tqdm_dataloader = tqdm(epochs, file=sys.stdout) if enable_tqdm else None
+        for epoch in tqdm_dataloader if enable_tqdm else epochs:
+            train_loss = self.train_one_epoch(epoch, rank, world_size, device, dataloader, distributed, ctx)
             # timing and logging
             t1 = time.time()
             dt = t1 - t0
@@ -455,12 +461,22 @@ class GPTRandomSampleTrainer(GPTTrainer):
                 if epoch >= 5: # let the training loop settle a bit
                     mfu = raw_model.estimate_mfu(dataloader.batch_size * self.gradient_accumulation_steps, dt)
                     running_mfu = mfu if running_mfu == -1.0 else 0.9*running_mfu + 0.1*mfu
-                print(f"Epoch {epoch}: loss {train_lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%")
+                description = f"Epoch {epoch}: loss {train_lossf:.4f}, time {dt*1000:.2f}ms, mfu {running_mfu*100:.2f}%"
+                if enable_tqdm:
+                    tqdm_dataloader.set_description(description)
+                else:
+                    print(description)
+                if self.logger:
+                    self.logger.log_metrics({"train_loss": train_lossf}, epoch)
             
             # Evaluate the loss on train/val sets and write checkpoints.
             if epoch % self.eval_interval == 0 and rank == 0:
-                eval_losses = self.validate(epoch, rank, world_size, dataloader, distributed, ctx)
-                print(f"Epoch {epoch}: train loss {eval_losses['train']:.4f}, val loss {eval_losses['val']:.4f}")
+                eval_losses = self.validate(epoch, rank, world_size, device, dataloader, distributed, ctx)
+                description = f"Epoch {epoch}: train loss {eval_losses['train']:.4f}, val loss {eval_losses['val']:.4f}"
+                if enable_tqdm:
+                    tqdm_dataloader.set_description(description)
+                else:
+                    print(description)
 
                 if eval_losses["val"] < self.best_val_loss or self.always_save_checkpoint:
                     self.best_val_loss = eval_losses["val"]
@@ -474,9 +490,10 @@ class GPTRandomSampleTrainer(GPTTrainer):
                         }
                         print(f"saving checkpoint: epoch={epoch}, best_val_loss={self.best_val_loss}")
                         self.logger.save_checkpoint(epoch=epoch, state_dict=state_dict)
+                if self.logger:
+                    self.logger.log_metrics({"val_loss": eval_losses["val"]}, epoch)
             
-    def train_one_epoch(self, epoch, rank, world_size, dataloader, distributed, ctx):
-        device = rank if world_size > 0 else "cpu"
+    def train_one_epoch(self, epoch, rank, world_size, device, dataloader, distributed, ctx):
         self.model.train()
 
         # Determine and set the learning rate for this iteration.
@@ -521,8 +538,7 @@ class GPTRandomSampleTrainer(GPTTrainer):
         return loss
 
     @torch.no_grad()
-    def validate(self, epoch, rank, world_size, dataloader, distributed, ctx):
-        device = rank if world_size > 0 else "cpu"
+    def validate(self, epoch, rank, world_size, device, dataloader, distributed, ctx):
         self.model.eval()
  
         out = {}
