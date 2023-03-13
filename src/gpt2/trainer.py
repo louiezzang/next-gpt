@@ -154,14 +154,14 @@ class GPTTrainer(object):
 
         return model, model_args
     
-    def __get_lr(self):
+    def get_lr(self):
         """ Returns the learning rate of the current optimizer.
         """
         for param_group in self.optimizer.param_groups:
             return param_group["lr"]
         
     # learning rate decay scheduler (cosine with warmup)
-    def __get_epoch_lr(self, epoch):
+    def get_epoch_lr(self, epoch):
         """ Gets the learning rate decay scheduler (cosine with warmup).
         """
 
@@ -279,7 +279,7 @@ class GPTTrainer(object):
         raw_model = self.model.module if distributed else self.model # Unwrap DDP container if needed
 
         # Determine and set the learning rate for this iteration.
-        lr = self.__get_epoch_lr(epoch) if self.decay_lr else self.lr
+        lr = self.get_epoch_lr(epoch) if self.decay_lr else self.lr
         for param_group in self.optimizer.param_groups:
             param_group["lr"] = lr
 
@@ -336,11 +336,11 @@ class GPTTrainer(object):
                 progress = ((batch_idx + 1) / total_batch_size) * 100
                 if enable_tqdm:
                     description = "Epoch {}, train: loss {:.4f}, lr {}, mfu {:.2f}% ".format(
-                        epoch, average_meter_set["train_loss"].avg, self.__get_lr(), self.running_mfu*100)
+                        epoch, average_meter_set["train_loss"].avg, self.get_lr(), self.running_mfu*100)
                     tqdm_dataloader.set_description(description)
                 elif (print_per_every > 0 and batch_idx % print_per_every == 0) or batch_idx == total_batch_size - 1:
                     description = "Epoch {}, train: loss {:.4f}, lr {} mfu {:.2f}%:  {:.0f}% | {:d}/{:d}".format(
-                        epoch, average_meter_set["train_loss"].avg, self.__get_lr(), progress, batch_idx+1, total_batch_size)
+                        epoch, average_meter_set["train_loss"].avg, self.get_lr(), progress, batch_idx+1, total_batch_size)
                     print(description)
 
         # Save checkpoint.
@@ -405,9 +405,9 @@ class GPTTrainer(object):
                     self.logger.save_checkpoint(epoch=epoch, state_dict=state_dict)
 
 
-class GPTRandomAccessTrainer(GPTTrainer):
+class GPTRandomSampleTrainer(GPTTrainer):
     """
-    Random access trainer.
+    Random sample trainer.
     """
 
     def train(self, rank, world_size, distributed=False, distributed_backend="nccl", enable_tqdm=False):
@@ -429,7 +429,7 @@ class GPTRandomAccessTrainer(GPTTrainer):
         ptdtype = {"float32": torch.float32, "bfloat16": torch.bfloat16, "float16": torch.float16}[self.dtype]
         ctx = nullcontext() if device_type == "cpu" else torch.amp.autocast(device_type=device_type, dtype=ptdtype)
 
-        dataloader = self.dataloader # Note that this is GPTRandomAccessDataloader!
+        dataloader = self.dataloader # Note that this is GPTRandomSampleDataloader!
 
         if world_size > 0:
             self.model = self.model.to(rank)
@@ -480,7 +480,7 @@ class GPTRandomAccessTrainer(GPTTrainer):
         self.model.train()
 
         # Determine and set the learning rate for this iteration.
-        lr = self.__get_epoch_lr(epoch) if self.decay_lr else self.lr
+        lr = self.get_epoch_lr(epoch) if self.decay_lr else self.lr
         for param_group in self.optimizer.param_groups:
             param_group["lr"] = lr
 
@@ -528,7 +528,7 @@ class GPTRandomAccessTrainer(GPTTrainer):
         out = {}
         for split in ["train", "val"]:
             losses = torch.zeros(self.eval_iters)
-            for k in range(self.eval_iterseval_iters):
+            for k in range(self.eval_iters):
                 X, Y = dataloader.get_batch(split)
 
                 if device == "cpu":

@@ -6,7 +6,8 @@ Pytorch DataLoader for GPT dataset.
 import random
 import numpy as np
 import torch
-from torch.utils.data import DataLoader
+from torch.utils.data import Dataset, DataLoader
+from torch.utils.data.sampler import Sampler
 from torch.utils.data.distributed import DistributedSampler
 
 
@@ -83,29 +84,61 @@ class GPTDataloader(object):
         return dataloader
 
 
+class BatchSampler(Sampler):
+    def __init__(self, batches):
+        self.batches = batches
 
-class GPTRandomAccessDataloader(object):
+    def __iter__(self):
+        for batch in self.batches:
+             yield batch
+
+    def __len__(self):
+        return len(self.batches)
+
+
+class GPTRandomSampleDataloader(object):
     def __init__(self, dataset, block_size, batch_size, meta=None):
         """
-        Random access data loader from the entire dataset.
+        Random sample data loader from the entire dataset.
 
         Args:
-            dataset (dict): The dataset which contains the entire ids from source data(key: train_ids, val_ids)
+            dataset (dict): The train dataset which contains the entire ids from source data or torch.utils.data.Dataset (key: 'train', 'val')
             block_size (int): The block size (eg. max token length)
             batch_size (int): The batch size
             meta (dict, optional): The extra metadata (eg. vocab_size, itos, stoi). Defaults to None.
         """
-        self.train_ids = dataset["train_ids"] if "train_ids" in dataset else None
-        self.val_ids = dataset["val_ids"] if "val_ids" in dataset else None
+        self.train = dataset["train"] if "train" in dataset else None
+        self.val = dataset["val"] if "val" in dataset else None
+        
+        if (self.train is not None and isinstance(self.train, (list, np.ndarray, np.generic))) or \
+            (self.val is not None and isinstance(self.val, (list, np.ndarray, np.generic))):
+            self.dataset_type = "list"
+        elif (self.train is not None and isinstance(self.train, Dataset)) or \
+            (self.val is not None and isinstance(self.val, Dataset)):
+            self.dataset_type = "dataset"
+        else:
+            raise ValueError(f"Not supported data type: {type(self.train)}")
 
         self.block_size = block_size
         self.batch_size = batch_size
         self.meta = meta
 
     def get_batch(self, split):
-        data = self.train_ids if split == "train" else self.val_ids
-        ix = torch.randint(len(data) - self.block_size, (self.batch_size,))
-        x = torch.stack([torch.from_numpy((data[i:i+self.block_size]).astype(np.int64)) for i in ix])
-        y = torch.stack([torch.from_numpy((data[i+1:i+1+self.block_size]).astype(np.int64)) for i in ix])
+        if self.dataset_type == "list":
+            data = self.train if split == "train" else self.val
+            if isinstance(data, (list)):
+                data = np.array(data, dtype=np.uint16)
+
+            ix = torch.randint(len(data) - self.block_size, (self.batch_size,))
+            x = torch.stack([torch.from_numpy((data[i:i+self.block_size]).astype(np.int64)) for i in ix])
+            y = torch.stack([torch.from_numpy((data[i+1:i+1+self.block_size]).astype(np.int64)) for i in ix])
+        else:
+            data = self.train if split == "train" else self.val
+            ix = torch.randint(len(data), (self.batch_size,))
+            # batch_sampler = BatchSampler([[1, 2, 3], [5, 6, 7], [4, 2, 1]])
+            batch_sampler = BatchSampler([ix.tolist()])
+            dataloader = DataLoader(dataset=data, batch_sampler=batch_sampler)
+            for batch in dataloader: # dataloader size is one!
+                x, y = batch
         
         return x, y
