@@ -40,6 +40,8 @@ class GPTTrainer(object):
         self.checkpoint = checkpoint
         self.logger = logger
         self.num_epochs = args.num_epochs
+        self.metric_ks = args.metric_ks
+        self.best_metric = args.best_metric if hasattr(args, "best_metric") else None
 
         # Data
         self.gradient_accumulation_steps = 5  # used to simulate larger batch sizes
@@ -291,7 +293,10 @@ class GPTTrainer(object):
         total_batch_size = len(dataloader)
         print_per_every = total_batch_size // self.print_interval
         for batch_idx, batch in enumerate(tqdm_dataloader if enable_tqdm else dataloader):
-            X, Y = batch
+            if len(batch) == 3:
+                X, Y, _ = batch
+            else:    
+                X, Y = batch
             batch_size = Y.shape[0]
 
             if device == "cpu":
@@ -342,7 +347,7 @@ class GPTTrainer(object):
                     tqdm_dataloader.set_description(description)
                 elif (print_per_every > 0 and batch_idx % print_per_every == 0) or batch_idx == total_batch_size - 1:
                     description = "Epoch {}, train: loss {:.4f}, lr {} mfu {:.2f}%:  {:.0f}% | {:d}/{:d}".format(
-                        epoch, average_meter_set["train_loss"].avg, self.get_lr(), progress, batch_idx+1, total_batch_size)
+                        epoch, average_meter_set["train_loss"].avg, self.get_lr(),  self.running_mfu*100, progress, batch_idx+1, total_batch_size)
                     print(description)
 
         # Save checkpoint.
@@ -361,31 +366,53 @@ class GPTTrainer(object):
 
         tqdm_dataloader = tqdm(dataloader) if enable_tqdm else None
         for batch_idx, batch in enumerate(tqdm_dataloader if enable_tqdm else dataloader):
-            X, Y = batch
+            Z = None
+            if len(batch) == 3:
+                X, Y, Z = batch
+            else:    
+                X, Y = batch
+
             batch_size = Y.shape[0]
 
             if device == "cpu":
                 X, Y = X.to(device), Y.to(device)
+                if Z is not None:
+                    Z = Z.to(device)
             else:
                 # Pin arrays x,y, which allows us to move them to GPU asynchronously (non_blocking=True)
                 X, Y = X.pin_memory().to(device, non_blocking=True), Y.pin_memory().to(device, non_blocking=True)
+                if Z is not None:
+                    Z = Z.pin_memory().to(device, non_blocking=True)
+
+            # print(f"X.shape = {X.shape}, Y.shape = {Y.shape}, Z.shape = {Z.shape if Z is not None else None}")
 
             with ctx:
                 logits, loss = self.model(X, Y)
+                if Z is not None:
+                    pred = self.model.generate(X, max_new_tokens=self.vocab_size)
+                    metrics = self.calculate_metrics(pred, Z)
+                    for k, v in metrics.items():
+                        average_meter_set.update(k, v)
  
             lossf = loss.item() # loss as float. note: this is a CPU-GPU sync point
             average_meter_set.update("val_loss", lossf)
 
             if rank == 0:
                 progress = ((batch_idx + 1) / total_batch_size) * 100
+                metric_keys = (
+                    ["val_loss"] +
+                    ["NDCG@%d" % k for k in self.metric_ks[:3]] +
+                    ["Recall@%d" % k for k in self.metric_ks[:3]]
+                )
+                metric_description = ", ".join(f"{k} {average_meter_set[k].avg:.4f}" for k in metric_keys if k in average_meter_set)
+                
                 if enable_tqdm:
-                    description = "Epoch {}, val: loss {:.4f}".format(
-                        epoch, average_meter_set["val_loss"].avg)
+                    description = "Epoch {}, val: {}".format(epoch, metric_description)
                     tqdm_dataloader.set_description(description)
                 elif (print_per_every > 0 and batch_idx % print_per_every == 0) or batch_idx == total_batch_size - 1:
-                    description = "Epoch {}, val: loss {:.4f}:  {:.0f}% | {:d}/{:d}".format(
+                    description = "Epoch {}, val: {}:  {:.0f}% | {:d}/{:d}".format(
                         epoch,
-                        average_meter_set["val_loss"].avg,
+                        metric_description,
                         progress,
                         batch_idx + 1,
                         total_batch_size)
@@ -404,6 +431,12 @@ class GPTTrainer(object):
                         "best_val_loss": self.best_val_loss,
                     }
                     self.logger.save_checkpoint(epoch=epoch, state_dict=state_dict)
+
+    def calculate_metrics(self, logits, labels):
+        scores = logits[:, -1, :]
+
+        metrics = recalls_and_ndcgs_for_ks(scores, labels, self.metric_ks)
+        return metrics
 
 
 class GPTRandomSampleTrainer(GPTTrainer):
@@ -491,7 +524,7 @@ class GPTRandomSampleTrainer(GPTTrainer):
                         print(f"saving checkpoint: epoch={epoch}, best_val_loss={self.best_val_loss}")
                         self.logger.save_checkpoint(epoch=epoch, state_dict=state_dict)
                 if self.logger:
-                    self.logger.log_metrics({"val_loss": eval_losses["val"]}, epoch)
+                    self.logger.log_metrics({"val_loss": eval_losses["val"].item()}, epoch)
             
     def train_one_epoch(self, epoch, rank, world_size, device, dataloader, distributed, ctx):
         self.model.train()
@@ -618,3 +651,32 @@ class AverageMeter(object):
 
     def __format__(self, format):
         return "{self.val:{format}} ({self.avg:{format}})".format(self=self, format=format)
+
+
+def recalls_and_ndcgs_for_ks(scores, labels, ks, middle_name=None):
+    metrics = {}
+
+    scores = scores.cpu()
+    labels = labels.cpu()
+    answer_count = labels.sum(1)
+    answer_count_float = answer_count.float()
+    labels_float = labels.float()
+    rank = (-scores).argsort(dim=1)
+    cut = rank
+
+    for k in sorted(ks, reverse=True):
+        cut = cut[:, :k]
+        hits = labels_float.gather(1, cut)
+
+        recall = hits.sum(1) / answer_count_float
+        metrics[f"Recall{'.' + str(middle_name) if middle_name else ''}@{k}"] = recall[~torch.isnan(recall)].mean().item()
+
+        position = torch.arange(2, 2 + k)
+        weights = 1 / torch.log2(position.float())
+        dcg = (hits * weights).sum(1)
+        idcg = torch.Tensor([weights[:min(int(n), k)].sum() for n in answer_count])
+        ndcg = dcg / idcg
+        ndcg = ndcg[~torch.isnan(ndcg)].mean()
+        metrics[f"NDCG{'.' + str(middle_name) if middle_name else ''}@{k}"] = ndcg.item()
+
+    return metrics

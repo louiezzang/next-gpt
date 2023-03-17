@@ -109,6 +109,7 @@ class GPTRandomSampleDataloader(object):
         """
         self.train = dataset["train"] if "train" in dataset else None
         self.val = dataset["val"] if "val" in dataset else None
+
         
         if (self.train is not None and isinstance(self.train, (list, np.ndarray, np.generic))) or \
             (self.val is not None and isinstance(self.val, (list, np.ndarray, np.generic))):
