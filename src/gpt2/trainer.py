@@ -392,7 +392,7 @@ class GPTTrainer(object):
                 lossf = loss.item() # loss as float. note: this is a CPU-GPU sync point
                 average_meter_set.update("val_loss", lossf)
                 if Z is not None:
-                    pred = self.model.topk(X, topk=100, temperature=self.temperature)
+                    pred = raw_model.topk(X, topk=100, temperature=self.temperature)
                     #  print(f"*** pred: {pred.shape}")
                     metrics = self.calculate_metrics(pred, Z)
                     for k, v in metrics.items():
