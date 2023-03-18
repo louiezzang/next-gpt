@@ -42,6 +42,7 @@ class GPTTrainer(object):
         self.num_epochs = args.num_epochs
         self.metric_ks = args.metric_ks if hasattr(args, "metric_ks") else [10]
         self.best_metric = args.best_metric if hasattr(args, "best_metric") else None
+        self.temperature = args.temperature if hasattr(args, "temperature") else 1.0
 
         # Data
         self.gradient_accumulation_steps = 5  # used to simulate larger batch sizes
@@ -391,7 +392,7 @@ class GPTTrainer(object):
                 lossf = loss.item() # loss as float. note: this is a CPU-GPU sync point
                 average_meter_set.update("val_loss", lossf)
                 if Z is not None:
-                    pred = self.model.generate(X, max_new_tokens=100)
+                    pred = self.model.topk(X, topk=100, temperature=self.temperature)
                     #  print(f"*** pred: {pred.shape}")
                     metrics = self.calculate_metrics(pred, Z)
                     for k, v in metrics.items():
@@ -404,7 +405,8 @@ class GPTTrainer(object):
                     ["NDCG@%d" % k for k in self.metric_ks[:3]] +
                     ["Recall@%d" % k for k in self.metric_ks[:3]]
                 )
-                metric_description = ", ".join([f"{k} {average_meter_set[k].avg:.4f}" for k in metric_keys if k in average_meter_set])
+
+                metric_description = ", ".join([f"{k} {average_meter_set[k].avg:.4f}" for k in metric_keys if k in average_meter_set.meters])
                 
                 if enable_tqdm:
                     description = "Epoch {}, val: {}".format(epoch, metric_description)
@@ -676,7 +678,5 @@ def recalls_and_ndcgs_for_ks(pred, labels, ks):
         ndcg = dcg / idcg
         ndcg = ndcg[~torch.isnan(ndcg)].mean()
         metrics[f"NDCG@{k}"] = ndcg.item()
-
-    print(f"*** metrics = {metrics}")
 
     return metrics

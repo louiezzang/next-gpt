@@ -346,6 +346,21 @@ class GPT(nn.Module):
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
         Most likely you'll want to make sure to be in model.eval() mode of operation for this.
+
+        Sampling:
+        A trick is to make the distribution P(w∣w1:t−1) sharper (increasing the likelihood of high probability words 
+        and decreasing the likelihood of low probability words) by lowering the so-called temperature of the softmax.
+        While applying temperature can make a distribution less random, in its limit, when setting temperature → 0.
+
+        Top-K Sampling:
+        Fan et. al (2018) introduced a simple, but very powerful sampling scheme, called Top-K sampling. 
+        In Top-K sampling, the K most likely next words are filtered 
+        and the probability mass is redistributed among only those K next words. 
+        GPT2 adopted this sampling scheme, which was one of the reasons for its success in story generation.
+
+        Reference: 
+        https://huggingface.co/blog/how-to-generate
+        https://huggingface.co/docs/transformers/v4.27.1/en/main_classes/text_generation#transformers.GenerationMixin.generate
         """
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
@@ -366,3 +381,17 @@ class GPT(nn.Module):
             idx = torch.cat((idx, idx_next), dim=1)
 
         return idx
+    
+    @torch.no_grad()
+    def topk(self, idx, top_k, temperature=1.0):
+        # if the sequence context is growing too long we must crop it at block_size
+        idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
+        # forward the model to get the logits for the index in the sequence
+        logits, _ = self(idx_cond)
+        # pluck the logits at the final step and scale by desired temperature
+        logits = logits[:, -1, :] / temperature
+        # crop the logits to only the top k options
+        values, indices = torch.topk(logits, min(top_k, logits.size(-1)))
+
+        return indices
+        
