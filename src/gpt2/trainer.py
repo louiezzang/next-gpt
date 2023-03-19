@@ -42,7 +42,10 @@ class GPTTrainer(object):
         self.num_epochs = args.num_epochs
         self.metric_ks = args.metric_ks if hasattr(args, "metric_ks") else [10]
         self.best_metric = args.best_metric if hasattr(args, "best_metric") else None
+        # Generation config
         self.temperature = args.temperature if hasattr(args, "temperature") else 1.0
+        self.top_k = args.top_k if hasattr(args, "top_k") else None
+        self.no_repeat = args.no_repeat if hasattr(args, "no_repeat") else False
 
         # Data
         self.gradient_accumulation_steps = 5  # used to simulate larger batch sizes
@@ -392,8 +395,9 @@ class GPTTrainer(object):
                 lossf = loss.item() # loss as float. note: this is a CPU-GPU sync point
                 average_meter_set.update("val_loss", lossf)
                 if Z is not None:
-                    pred = raw_model.topk(X, topk=100, temperature=self.temperature)
-                    #  print(f"*** pred: {pred.shape}")
+                    # pred = raw_model.topk(X, top_k=100, temperature=self.temperature)
+                    pred = raw_model.generate(X, 50, temperature=self.temperature, top_k=self.top_k, no_repeat=self.no_repeat, with_input=False)
+                    # print(f"*** pred: {pred.shape}")
                     metrics = self.calculate_metrics(pred, Z)
                     for k, v in metrics.items():
                         average_meter_set.update(k, v)

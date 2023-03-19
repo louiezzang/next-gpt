@@ -341,7 +341,7 @@ class GPT(nn.Module):
         return mfu
 
     @torch.no_grad()
-    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None):
+    def generate(self, idx, max_new_tokens, temperature=1.0, top_k=None, no_repeat=False, with_input=True):
         """
         Take a conditioning sequence of indices idx (LongTensor of shape (b,t)) and complete
         the sequence max_new_tokens times, feeding the predictions back into the model each time.
@@ -362,6 +362,17 @@ class GPT(nn.Module):
         https://huggingface.co/blog/how-to-generate
         https://huggingface.co/docs/transformers/v4.27.1/en/main_classes/text_generation#transformers.GenerationMixin.generate
         """
+        batch_size = idx.shape[0]
+        vocab_size = self.config.vocab_size
+        input_seq_len = idx.shape[1]
+        
+        idx_mask = None
+        if no_repeat:
+            idx_mask = torch.zeros((batch_size, vocab_size), dtype=torch.long, device=idx.device)
+            for i, indices in enumerate(idx):
+                for j in indices:
+                    idx_mask[i, j] = 1
+
         for _ in range(max_new_tokens):
             # if the sequence context is growing too long we must crop it at block_size
             idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
@@ -369,6 +380,10 @@ class GPT(nn.Module):
             logits, _ = self(idx_cond)
             # pluck the logits at the final step and scale by desired temperature
             logits = logits[:, -1, :] / temperature
+
+            # no repeat the same word
+            if no_repeat:
+                logits[idx_mask != 0] = -float('Inf')
             # optionally crop the logits to only the top k options
             if top_k is not None:
                 v, _ = torch.topk(logits, min(top_k, logits.size(-1)))
@@ -380,16 +395,35 @@ class GPT(nn.Module):
             # append sampled index to the running sequence and continue
             idx = torch.cat((idx, idx_next), dim=1)
 
+            # update idx mask
+            if no_repeat:
+                for i, indices in enumerate(idx_next):
+                    for j in indices:
+                        idx_mask[i, j] = 1
+
+        if not with_input:
+            idx = idx[:,input_seq_len:]
         return idx
     
     @torch.no_grad()
     def topk(self, idx, top_k, temperature=1.0):
+        batch_size = idx.shape[0]
+        vocab_size = self.config.vocab_size
+
+        idx_mask = torch.zeros((batch_size, vocab_size), dtype=torch.long, device=idx.device)
+        for i, indices in enumerate(idx):
+            for j in indices:
+                idx_mask[i, j] = 1
+
         # if the sequence context is growing too long we must crop it at block_size
         idx_cond = idx if idx.size(1) <= self.config.block_size else idx[:, -self.config.block_size:]
         # forward the model to get the logits for the index in the sequence
         logits, _ = self(idx_cond)
         # pluck the logits at the final step and scale by desired temperature
         logits = logits[:, -1, :] / temperature
+
+        # no repeat the same word as input idx
+        logits[idx_mask != 0] = -float('Inf')
         # crop the logits to only the top k options
         values, indices = torch.topk(logits, min(top_k, logits.size(-1)))
 
