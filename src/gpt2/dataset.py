@@ -21,6 +21,7 @@ class GPTDataset(Dataset):
         self.val_holdout_list = val_holdout_list
         self.vocab_size = vocab_size
         self.train = train
+        self.PADDING_TOKEN_IDX = 0
 
     def __len__(self):
         return len(self.seq_list)
@@ -28,12 +29,17 @@ class GPTDataset(Dataset):
     def __getitem__(self, index):
         seq = self.seq_list[index]
         if self.train:
-            if len(seq) < self.block_size + 1:
+            if len(seq) < 1:
                 return None
-            x = torch.tensor(seq[:self.block_size])
-            y = torch.tensor(seq[1:self.block_size+1])
-            # x = torch.tensor(seq[-self.block_size-1:-1])
-            # y = torch.tensor(seq[-self.block_size:])
+            
+            padding_len = (self.block_size + 1) - len(seq)
+            seq = [self.PADDING_TOKEN_IDX] * padding_len + seq
+
+            # x = torch.tensor(seq[:self.block_size])
+            # y = torch.tensor(seq[1:self.block_size+1])
+            # Crop items to the last block_size tokens.
+            x = torch.tensor(seq[-self.block_size-1:-1])
+            y = torch.tensor(seq[-self.block_size:])
 
             if self.val_holdout_list:
                 holdout_seq = self.val_holdout_list[index]
@@ -45,8 +51,11 @@ class GPTDataset(Dataset):
                 return x, y, torch.tensor(labels)
             return x, y
         else:
-            if len(seq) < self.block_size:
+            if len(seq) < 1:
                 return None
+            
+            padding_len = self.block_size - len(seq)
+            seq = [self.PADDING_TOKEN_IDX] * padding_len + seq
             # Crop items to the last block_size tokens.
             x = torch.tensor(seq[-self.block_size:])
             return x
