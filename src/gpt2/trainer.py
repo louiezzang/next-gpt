@@ -12,7 +12,11 @@ from tqdm import tqdm
 import dataclasses
 from contextlib import nullcontext
 
+import random
+import numpy as np
+
 import torch
+import torch.backends.cudnn as cudnn
 from torch import nn, optim
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -46,6 +50,10 @@ class GPTTrainer(object):
         self.generative_function = args.generative_function if hasattr(args, "generative_function") else "generate"
         self.temperature = args.temperature if hasattr(args, "temperature") else 1.0
         self.top_k = args.top_k if hasattr(args, "top_k") else None
+
+        # Fix random seed
+        model_init_seed = args.model_init_seed if hasattr(args, "model_init_seed") else 0
+        fix_random_seed_as(model_init_seed)
 
         # Data
         self.gradient_accumulation_steps = 5  # used to simulate larger batch sizes
@@ -657,6 +665,15 @@ class AverageMeter(object):
 
     def __format__(self, format):
         return "{self.val:{format}} ({self.avg:{format}})".format(self=self, format=format)
+
+
+def fix_random_seed_as(random_seed):
+    random.seed(random_seed)
+    torch.manual_seed(random_seed)
+    torch.cuda.manual_seed_all(random_seed)
+    np.random.seed(random_seed)
+    cudnn.deterministic = True
+    cudnn.benchmark = False
 
 
 def recalls_and_ndcgs_for_ks(pred, labels, ks):
