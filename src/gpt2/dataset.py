@@ -32,6 +32,8 @@ class GPTDataset(Dataset):
                 return None
             x = torch.tensor(seq[:self.block_size])
             y = torch.tensor(seq[1:self.block_size+1])
+            # x = torch.tensor(seq[-self.block_size-1:-1])
+            # y = torch.tensor(seq[-self.block_size:])
 
             if self.val_holdout_list:
                 holdout_seq = self.val_holdout_list[index]
@@ -43,6 +45,8 @@ class GPTDataset(Dataset):
                 return x, y, torch.tensor(labels)
             return x, y
         else:
+            if len(seq) < self.block_size:
+                return None
             # Crop items to the last block_size tokens.
-            x = torch.tensor(seq[:-self.block_size])
+            x = torch.tensor(seq[-self.block_size:])
             return x
