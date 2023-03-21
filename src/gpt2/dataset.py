@@ -29,7 +29,7 @@ class GPTDataset(Dataset):
     def __getitem__(self, index):
         seq = self.seq_list[index]
         if self.train:
-            if len(seq) < 1:
+            if len(seq) < 2:
                 return None
             
             padding_len = (self.block_size + 1) - len(seq)
