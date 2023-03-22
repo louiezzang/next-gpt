@@ -33,7 +33,7 @@ class GPTTrainer(object):
             args: The arguments
             dataloader: The dataloader
             device: 'cpu', 'cuda', 'cuda:0', 'cuda:1' etc., or try 'mps' on macbooks
-            init_from: The model initialization option ('scratch', 'resume', or 'gpt2...')
+            init_from: The model initialization option ('scratch', 'resume', 'pretrained' or 'gpt2...')
             checkpoint: The checkpoint dict when resumes training from a checkpoint
             logger: The model logger which is `ModelLogger` object
         """
@@ -152,6 +152,29 @@ class GPTTrainer(object):
             model.load_state_dict(state_dict)
             self.start_epoch_num = checkpoint["epoch"]
             self.best_val_loss = checkpoint["best_val_loss"]
+        elif self.init_from == "pretrained":
+            print(f"Finetuning from a pretrained checkpoint")
+            # Finetune from a pretrained checkpoint.
+            checkpoint = self.checkpoint
+            # checkpoint_model_args = checkpoint["model_args"]
+
+            # Force these config attributes to be equal otherwise we can't even resume training
+            # the rest of the attributes (e.g. dropout) can stay as desired from command line.
+            # for k in [field.name for field in dataclasses.fields(GPTConfig)]:
+            #     model_args[k] = checkpoint_model_args[k]
+            
+            # Create the model.
+            model_args["vocab_size"] = self.vocab_size
+            gptconf = GPTConfig(**model_args)
+            model = GPT(gptconf)
+            state_dict = checkpoint["model_state_dict"]
+            # Fix the keys of the state dictionary :(
+            # honestly no idea how checkpoints sometimes get this prefix, have to debug more
+            unwanted_prefix = "_orig_mod."
+            for k,v in list(state_dict.items()):
+                if k.startswith(unwanted_prefix):
+                    state_dict[k[len(unwanted_prefix):]] = state_dict.pop(k)
+            model.load_state_dict(state_dict)
         elif self.init_from.startswith("gpt2"):
             print(f"Initializing from OpenAI GPT-2 weights: {self.init_from}")
             # Initialize from OpenAI GPT-2 weights.
