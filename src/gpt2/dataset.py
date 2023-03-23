@@ -97,6 +97,7 @@ class SFTDataset(Dataset):
         #x = torch.tensor(input_seq[-self.block_size:])
         x = torch.tensor(input_seq[:self.block_size])
         y = None
+        labels = None
         if answer_seq:
             answer_padding_len = self.block_size - len(answer_seq)
             answer_seq = answer_seq + [self.PAD_TOKEN_IDX] * answer_padding_len
@@ -109,6 +110,9 @@ class SFTDataset(Dataset):
                 if idx in holdout_seq:
                     labels[idx] = 1
 
+        if y is not None and labels is not None:
             return x, y, torch.tensor(labels)
-
-        return x, y
+        elif y is not None:
+            return x, y
+        else:
+            return x
