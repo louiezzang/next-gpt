@@ -461,7 +461,7 @@ class GPTTrainer(object):
             self.logger.log_metrics(average_meter_set.averages(), epoch)
             if average_meter_set["val_loss"].avg < self.best_val_loss or self.always_save_checkpoint:
                 self.best_val_loss = average_meter_set["val_loss"].avg
-                if epoch > 0:
+                if epoch >= 0:
                     state_dict = {
                         "model_state_dict": raw_model.state_dict(),
                         "optimizer": self.optimizer.state_dict(),
