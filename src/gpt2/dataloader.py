@@ -31,13 +31,13 @@ class GPTDataloader(object):
         batch = list(filter(lambda x: x is not None, batch))
         return torch.utils.data.dataloader.default_collate(batch)
 
-    def get_pytorch_dataloaders(self, rank, world_size):
-        train_loader = self.get_train_loader(rank, world_size)
-        val_loader = self.get_val_loader(rank, world_size)
-        test_loader = self.get_test_loader(rank, world_size)
+    def get_pytorch_dataloaders(self, rank, world_size, shuffle=True):
+        train_loader = self.get_train_loader(rank, world_size, shuffle)
+        val_loader = self.get_val_loader(rank, world_size, shuffle)
+        test_loader = self.get_test_loader(rank, world_size, shuffle)
         return train_loader, val_loader, test_loader
 
-    def get_train_loader(self, rank, world_size):
+    def get_train_loader(self, rank, world_size, shuffle=True):
         dataset = self.train
         if world_size > 0:
             sampler = DistributedSampler(dataset, rank=rank, num_replicas=world_size)
@@ -50,18 +50,18 @@ class GPTDataloader(object):
         else:
             dataloader = DataLoader(dataset,
                                     batch_size=self.train_batch_size,
-                                    shuffle=True,
+                                    shuffle=shuffle,
                                     collate_fn=self.collate_fn,
                                     drop_last=self.drop_last)
         return dataloader
 
-    def get_val_loader(self, rank, world_size):
-        return self._get_eval_loader(mode="val", rank=rank, world_size=world_size)
+    def get_val_loader(self, rank, world_size, shuffle=True):
+        return self._get_eval_loader(mode="val", rank=rank, world_size=world_size, shuffle=shuffle)
 
-    def get_test_loader(self, rank, world_size):
-        return self._get_eval_loader(mode="test", rank=rank, world_size=world_size)
+    def get_test_loader(self, rank, world_size, shuffle=True):
+        return self._get_eval_loader(mode="test", rank=rank, world_size=world_size, shuffle=shuffle)
 
-    def _get_eval_loader(self, mode, rank, world_size):
+    def _get_eval_loader(self, mode, rank, world_size, shuffle):
         batch_size = self.val_batch_size if mode == "val" else self.test_batch_size
         dataset = self.val if mode == "val" else self.test
         if dataset is None:
@@ -78,7 +78,7 @@ class GPTDataloader(object):
         else:
             dataloader = DataLoader(dataset,
                                     batch_size=batch_size,
-                                    shuffle=True,
+                                    shuffle=shuffle,
                                     collate_fn=self.collate_fn,
                                     drop_last=self.drop_last)
         return dataloader
