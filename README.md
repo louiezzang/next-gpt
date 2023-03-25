@@ -1,6 +1,12 @@
 # nextmining-gpt
 ---
 
+# Requirements
+Make sure to install PyTorch >= 2.0
+$ pip3 install numpy --pre torch torchvision --force-reinstall --index-url https://download.pytorch.org/whl/nightly/cu116
+
+python >= 3.8
+
 # Development Environment
 This is for setting up your IDE development environment.
 ```
@@ -13,3 +19,4 @@ $ pipenv shell
 
 # References
 - https://github.com/karpathy/nanoGPT
+
