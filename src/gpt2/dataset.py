@@ -35,7 +35,8 @@ class GPTDataset(Dataset):
                 return None
             
             padding_len = (self.block_size + 1) - len(seq)
-            seq = [self.PAD_TOKEN_IDX] * padding_len + seq
+            # seq = [self.PAD_TOKEN_IDX] * padding_len + seq
+            seq = seq + [self.PAD_TOKEN_IDX] * padding_len
 
             # x = torch.tensor(seq[:self.block_size])
             # y = torch.tensor(seq[1:self.block_size+1])
