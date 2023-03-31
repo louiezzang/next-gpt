@@ -1,4 +1,4 @@
-"""Builds the application egg package library.
+"""Builds the package.
 @author: Younggue Bae
 """
 from __future__ import print_function
