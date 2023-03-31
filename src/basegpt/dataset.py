@@ -18,7 +18,7 @@ import transformers
 IGNORE_INDEX = -100
 
 
-class SFTDataset(Dataset):
+class SupervisedDataset(Dataset):
     """
     Dataset for Supervised Fine Tuning.
     """
