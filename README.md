@@ -21,3 +21,4 @@ $ pipenv shell
 - https://github.com/karpathy/nanoGPT
 - https://github.com/airobotlab/KoChatGPT
 - https://github.com/dredwardhyde/gpt-neo-fine-tuning-example/blob/main/gpt_neo.py
+- https://github.com/databrickslabs/dolly
