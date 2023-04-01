@@ -2,19 +2,8 @@
 
 set -e -o pipefail
 
-upload_wheel()
+build_wheel()
 {
-  local mode=$1
-
-  if [ $# != 1 ]; then
-    echo "Usage: $0 ${FUNCNAME[0]} <mode: dev, prod>"
-    exit 1
-  fi
-
-  echo "$0 ${FUNCNAME[0]}"
-  echo "mode = ${mode}"
-  echo "Deploying package to Databricks File System..."
-
   echo "Build package wheel file..."
   python3 setup.py bdist_wheel
 
@@ -26,28 +15,10 @@ upload_wheel()
 
   echo "Copy ${latest_built_file} to .dist/${latest_file_name}"
   cp "${latest_built_file}" "./dist/${latest_file_name}"
-
-  local dbfs_lib_home="dbfs:/FileStore/libs/${mode}"
-  databricks fs mkdirs "${dbfs_lib_home}"
-
-  dbfs cp -r --overwrite dist "${dbfs_lib_home}"
-
-  echo "Deployed package to Databricks File System: ${dbfs_lib_home}"
 }
 
 upload_egg()
 {
-  local mode=$1
-
-  if [ $# != 1 ]; then
-    echo "Usage: $0 ${FUNCNAME[0]} <mode: dev, prod>"
-    exit 1
-  fi
-
-  echo "$0 ${FUNCNAME[0]}"
-  echo "mode = ${mode}"
-  echo "Deploying package to Databricks File System..."
-
   echo "Build package egg file..."
   python3 setup.py bdist_egg
 
