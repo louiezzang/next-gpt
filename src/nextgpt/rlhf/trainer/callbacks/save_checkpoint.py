@@ -1,8 +1,8 @@
 import os
 
 import torch.distributed as dist
-from ..trainer.strategies import ColossalAIStrategy, Strategy
-from ..trainer.utils import is_rank_0
+from ...trainer.strategies import ColossalAIStrategy, Strategy
+from ...trainer.utils import is_rank_0
 from torch import nn
 from torch.optim import Optimizer
 

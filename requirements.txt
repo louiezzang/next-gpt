@@ -2,3 +2,6 @@ transformers  # for huggingface transformers <3 (to load GPT-2 checkpoints)
 datasets  # for huggingface datasets <3 (if you want to download + preprocess OpenWebText)
 tiktoken  # for OpenAI's fast BPE code <3
 # wandb  # for optional logging <3
+loralib
+colossalai>=0.2.4
+langchain
