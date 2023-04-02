@@ -34,5 +34,7 @@ $ pipenv shell
 # References
 - https://github.com/karpathy/nanoGPT
 - https://github.com/airobotlab/KoChatGPT
+- https://github.com/airobotlab/KoChatGPT/tree/main/colossalai_ChatGPT_230319
+- https://github.com/hpcaitech/ColossalAI/tree/main/applications/Chat
 - https://github.com/dredwardhyde/gpt-neo-fine-tuning-example/blob/main/gpt_neo.py
 - https://github.com/databrickslabs/dolly
