@@ -1,7 +1,21 @@
 # next-gpt
 ---
 
-# Requirements
+# Installation
+```
+$ git clone https://github.com/louiezzang/next-gpt.git
+$ cd next-gpt/
+$ pip install .
+$ cd ../
+```
+or you can build the wheel file.
+```
+$ git clone https://github.com/louiezzang/next-gpt.git
+$ ./next-gpt/build.sh build_wheel
+$ ls ./next-gpt/dist/
+```
+
+# Requirements (Optional)
 Make sure to install PyTorch >= 2.0 for nanogpt module.
 
 $ pip3 install numpy --pre torch torchvision --force-reinstall --index-url https://download.pytorch.org/whl/nightly/cu116
