@@ -35,18 +35,13 @@ class SupervisedDataset(Dataset):
         self.tokenizer = tokenizer
         self.prompt_template = prompt_template
         # prompt_template example:
+        '''
         (
             "Below is an instruction that describes a task, paired with an input that provides further context.\n\n"
             "Write a response that appropriately completes the request.\n\n"
-            "### Instruction:\nWrite a response that appropriately respond to the voice of cutomer.\n\n"
-            "### PRODUCT_NAME:\n{PRODUCT_NAME}\n\n"
-            "### RATING:\n{RATING}\n\n"
-            "### WHAT_YOU_LIKED:\n{WHAT_YOU_LIKED}\n\n"
-            "### WHAT_YOU_DIDNT_LIKE:\n{WHAT_YOU_DIDNT_LIKE}\n\n"
-            "### REVIEW_TITLE:\n{REVIEW_TITLE}\n\n"
-            "### REVIEW_TEXT:\n{REVIEW_TEXT}\n\n"
-            "### Response:"
+            "### Instruction:\n{prompt}\n\n### Response:"
         )
+        '''
         self.verbose = verbose
 
         ############################################################
