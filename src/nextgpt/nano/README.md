@@ -1,6 +1,6 @@
 
-This module was forked from nanoGPT by Andrej karpathy.
-This nanoGPT is a good resource to understand the basic GPT model architecture.
+This module was forked from [nanoGPT](https://github.com/karpathy/nanoGPT) git repo of Andrej karpathy.
+This nanoGPT is a good resource to understand the basic concept of GPT model architecture.
 
 - https://www.youtube.com/watch?v=kCc8FmEb1nY
 - https://github.com/karpathy/minGPT
