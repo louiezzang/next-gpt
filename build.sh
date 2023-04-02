@@ -17,7 +17,7 @@ build_wheel()
   cp "${latest_built_file}" "./dist/${latest_file_name}"
 }
 
-upload_egg()
+build_egg()
 {
   echo "Build package egg file..."
   python3 setup.py bdist_egg
@@ -30,13 +30,6 @@ upload_egg()
 
   echo "Copy ${latest_built_file} to .dist/${latest_file_name}"
   cp "${latest_built_file}" "./dist/${latest_file_name}"
-
-  local dbfs_lib_home="dbfs:/FileStore/libs/${mode}"
-  databricks fs mkdirs "${dbfs_lib_home}"
-
-  dbfs cp -r --overwrite dist "${dbfs_lib_home}"
-
-  echo "Deployed package to Databricks File System: ${dbfs_lib_home}"
 }
 
 CMD=$1
