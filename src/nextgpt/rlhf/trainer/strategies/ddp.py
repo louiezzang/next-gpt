@@ -5,9 +5,9 @@ import numpy as np
 import torch
 import torch.distributed as dist
 import torch.nn as nn
-from chatgpt.models.base import Actor
-from chatgpt.models.lora import LoraLinear
-from chatgpt.replay_buffer import ReplayBuffer
+from ..models.base import Actor
+from ..models.lora import LoraLinear
+from ..replay_buffer import ReplayBuffer
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
