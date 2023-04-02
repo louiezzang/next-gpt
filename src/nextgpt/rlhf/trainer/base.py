@@ -2,8 +2,8 @@ from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional, Union
 
 import torch
-from chatgpt.experience_maker import Experience, ExperienceMaker
-from chatgpt.replay_buffer import ReplayBuffer
+from ..experience_maker import Experience, ExperienceMaker
+from ..replay_buffer import ReplayBuffer
 from torch import Tensor
 from torch.utils.data import DistributedSampler
 from tqdm import tqdm
