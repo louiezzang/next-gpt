@@ -2,7 +2,7 @@
 # nanoGPT
 ---
 This module was forked and modified from [nanoGPT](https://github.com/karpathy/nanoGPT) git repo of Andrej karpathy.
-This nanoGPT is a good resource to understand the basic concept of GPT model architecture.
+This nanoGPT is a good resource to understand the basic concept of GPT-2 model architecture.
 
 # Requirements
 Make sure to install PyTorch >= 2.0 for nanogpt module.
