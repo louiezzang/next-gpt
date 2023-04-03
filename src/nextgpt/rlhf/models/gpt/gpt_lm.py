@@ -1,22 +1,21 @@
 from typing import Optional
 
-import torch.nn as nn
 from transformers.models.gpt2.configuration_gpt2 import GPT2Config
-from transformers.models.gpt2.modeling_gpt2 import GPT2Model
+from transformers.models.gpt2.modeling_gpt2 import GPT2LMHeadModel
 
-from ..base import RewardModel
+from ..base import LM
 
 
-class GPTRM(RewardModel):
+class GPTLM(LM):
     """
-    GPT Reward model.
+    GPT language model.
 
     Args:
         pretrained (str): Pretrained model name or path.
         config (GPT2Config): Model config.
         checkpoint (bool): Enable gradient checkpointing.
-        lora_rank (int): Rank of the low-rank approximation.
-        lora_train_bias (str): LoRA bias training mode.
+        lora_rank (int): Rank of the LoRa layer.
+        lora_train_bias (str): Bias training strategy for the LoRa layer.
     """
 
     def __init__(self,
@@ -26,14 +25,11 @@ class GPTRM(RewardModel):
                  lora_rank: int = 0,
                  lora_train_bias: str = 'none') -> None:
         if pretrained is not None:
-            model = GPT2Model.from_pretrained(pretrained)
+            model = GPT2LMHeadModel.from_pretrained(pretrained)
         elif config is not None:
-            model = GPT2Model(config)
+            model = GPT2LMHeadModel(config)
         else:
-            model = GPT2Model(GPT2Config())
+            model = GPT2LMHeadModel(GPT2Config())
         if checkpoint:
             model.gradient_checkpointing_enable()
-
-        value_head = nn.Linear(model.config.n_embd, 1)
-        value_head.weight.data.normal_(mean=0.0, std=1 / (model.config.n_embd + 1))
-        super().__init__(model, value_head, lora_rank, lora_train_bias)
+        super().__init__(model, lora_rank, lora_train_bias)

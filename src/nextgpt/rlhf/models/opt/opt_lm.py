@@ -1,14 +1,14 @@
 from typing import Optional
 
-import torch.nn as nn
-from transformers import OPTConfig, OPTModel
+from transformers.models.opt.configuration_opt import OPTConfig
+from transformers.models.opt.modeling_opt import OPTForCausalLM
 
-from ..base import RewardModel
+from ..base import LM
 
 
-class OPTRM(RewardModel):
+class OPTLM(LM):
     """
-    OPT Reward model.
+    OPT language model.
 
     Args:
         pretrained (str): Pretrained model name or path.
@@ -25,14 +25,11 @@ class OPTRM(RewardModel):
                  lora_rank: int = 0,
                  lora_train_bias: str = 'none') -> None:
         if pretrained is not None:
-            model = OPTModel.from_pretrained(pretrained)
+            model = OPTForCausalLM.from_pretrained(pretrained)
         elif config is not None:
-            model = OPTModel(config)
+            model = OPTForCausalLM(config)
         else:
-            model = OPTModel(OPTConfig())
+            model = OPTForCausalLM(OPTConfig())
         if checkpoint:
             model.gradient_checkpointing_enable()
-
-        value_head = nn.Linear(model.config.word_embed_proj_dim, 1)
-        value_head.weight.data.normal_(mean=0.0, std=1 / (model.config.word_embed_proj_dim + 1))
-        super().__init__(model, value_head, lora_rank, lora_train_bias)
+        super().__init__(model, lora_rank, lora_train_bias)
