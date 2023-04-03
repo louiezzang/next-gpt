@@ -11,7 +11,7 @@ from .base import Callback
 
 class SaveCheckpoint(Callback):
     """
-        The callback for saving checkpoint for coati.
+        The callback for saving checkpoint for chatgpt.
 
         Only support saving actor and critic model.
         A typical architecture of the saved checkpoint would be:
