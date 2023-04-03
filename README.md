@@ -15,12 +15,6 @@ $ ./next-gpt/build.sh build_wheel
 $ ls ./next-gpt/dist/
 ```
 
-# Requirements (Optional)
-Make sure to install PyTorch >= 2.0 for nanogpt module.
-
-$ pip3 install numpy --pre torch torchvision --force-reinstall --index-url https://download.pytorch.org/whl/nightly/cu116
-
-
 # Development Environment (Optional)
 This is only for setting up your IDE development environment.
 ```
