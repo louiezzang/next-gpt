@@ -64,6 +64,7 @@ class RewardModelTrainer(ABC):
         dist = 0
         on = 0
         cnt = 0
+        # loss_sum = 0
         self.model.eval()
         with torch.no_grad():
             for chosen_ids, c_mask, reject_ids, r_mask in dataloader:
@@ -78,7 +79,10 @@ class RewardModelTrainer(ABC):
                     if chosen_reward[i] > reject_reward[i]:
                         on += 1
                 dist += (chosen_reward - reject_reward).mean().item()
+                loss = self.loss_fn(chosen_reward, reject_reward)
+                # loss_sum += loss.item()
             dist_mean = dist / len(dataloader)
+            # loss_mean = loss_sum / len(dataloader)
             acc = on / cnt
         self.model.train()
         return dist_mean, acc
@@ -116,7 +120,7 @@ class RewardModelTrainer(ABC):
                                            columns=['step', 'loss', 'dist', 'acc'])
                         log.to_csv('log_%s.csv' % time, mode='a', header=False, index=False)
                 step_bar.update()
-                step_bar.set_postfix({'dist': dist, 'acc': acc})
+                step_bar.set_postfix({'loss': loss.item(), 'dist': dist, 'acc': acc})
 
             # eval
             dist, acc = self.eval_acc(self.eval_dataloader)
