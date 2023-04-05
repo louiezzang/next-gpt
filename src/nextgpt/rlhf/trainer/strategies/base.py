@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 from contextlib import nullcontext
-from typing import Any, List, Tuple, Union
+from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -9,6 +9,7 @@ from ...models.base import Actor, Critic, RewardModel
 from ...replay_buffer import ReplayBuffer
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
+# from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
 from .sampler import DistributedSampler
 
@@ -112,7 +113,12 @@ class Strategy(ABC):
         return Strategy._unwrap_model(actor)
 
     @abstractmethod
-    def save_model(self, model: nn.Module, path: str, only_rank0: bool = False) -> None:
+    def save_model(self,
+                   model: nn.Module,
+                   path: str,
+                   only_rank0: bool = False,
+                   #tokenizer: Optional[PreTrainedTokenizerBase] = None
+                   ) -> None:
         pass
 
     @abstractmethod
