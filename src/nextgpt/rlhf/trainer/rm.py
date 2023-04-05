@@ -79,7 +79,7 @@ class RewardModelTrainer(ABC):
                     if chosen_reward[i] > reject_reward[i]:
                         on += 1
                 dist += (chosen_reward - reject_reward).mean().item()
-                loss = self.loss_fn(chosen_reward, reject_reward)
+                # loss = self.loss_fn(chosen_reward, reject_reward)
                 # loss_sum += loss.item()
             dist_mean = dist / len(dataloader)
             # loss_mean = loss_sum / len(dataloader)
