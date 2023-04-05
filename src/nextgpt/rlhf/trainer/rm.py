@@ -134,5 +134,7 @@ class RewardModelTrainer(ABC):
     def save_model(self,
                    path: str,
                    only_rank0: bool = False,
-                   tokenizer: Optional[PreTrainedTokenizerBase] = None) -> None:
-        self.strategy.save_model(model=self.model, path=path, only_rank0=only_rank0, tokenizer=tokenizer)
+                   #tokenizer: Optional[PreTrainedTokenizerBase] = None
+                   ) -> None:
+        #self.strategy.save_model(model=self.model, path=path, only_rank0=only_rank0, tokenizer=tokenizer)
+        self.strategy.save_model(model=self.model, path=path, only_rank0=only_rank0)
