@@ -16,14 +16,25 @@ class RewardDataset(Dataset):
         max_length: max length of input
     """
 
-    def __init__(self, dataset, tokenizer: Callable, max_length: int) -> None:
+    def __init__(self, 
+                 dataset, 
+                 tokenizer: Callable, 
+                 max_length: int,
+                 prompt_template=None,
+                 prompt_field="prompt", 
+                 chosen_field="chosen",
+                 rejected_field="rejected",
+                 ) -> None:
         super().__init__()
         self.chosen = []
         self.reject = []
         for data in tqdm(dataset, disable=not is_rank_0()):
-            prompt = data['prompt']
+            if prompt_template is not None:
+                prompt = prompt_template.format_map(data)
+            else:
+                prompt = data[prompt_field]
 
-            chosen = prompt + data['chosen'] + "<|endoftext|>"
+            chosen = prompt + data[chosen_field] + "<|endoftext|>"
             chosen_token = tokenizer(chosen,
                                      max_length=max_length,
                                      padding="max_length",
@@ -34,7 +45,7 @@ class RewardDataset(Dataset):
                 "attention_mask": chosen_token['attention_mask']
             })
 
-            reject = prompt + data['rejected'] + "<|endoftext|>"
+            reject = prompt + data[rejected_field] + "<|endoftext|>"
             reject_token = tokenizer(reject,
                                      max_length=max_length,
                                      padding="max_length",

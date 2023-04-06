@@ -5,6 +5,7 @@ PyTorch Dataset for chatGPT.
 """
 import os
 import copy
+from tqdm import tqdm
 from typing import Optional, Dict, Sequence
 from dataclasses import dataclass, field
 
@@ -26,8 +27,8 @@ class SupervisedDataset(Dataset):
     def __init__(self, 
                  data: Sequence[Dict], 
                  tokenizer, 
-                 prompt_template,
-                 prompt_fields=["prompt"], 
+                 prompt_template=None,
+                 prompt_field="prompt", 
                  completion_field="completion",
                  verbose=False):
         super().__init__()
@@ -46,13 +47,18 @@ class SupervisedDataset(Dataset):
 
         ############################################################
         sources = []
-        for example in data:
-            prompt_input = prompt_template.format_map(example)
+        targets = []
+        for example in tqdm(data):
+            # Prompt
+            if prompt_template is not None:
+                prompt_input = prompt_template.format_map(example)
+            else:
+                prompt_input = example[prompt_field]
             sources.append(prompt_input)
 
-        targets = []
-        for example in data:
-            completion = example.get(completion_field, "")
+            # Completion
+            # completion = example.get(completion_field, "")
+            completion = example[completion_field]
             targets.append(f"{completion}{tokenizer.eos_token}")
 
         if verbose:
