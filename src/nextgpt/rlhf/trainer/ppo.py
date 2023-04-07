@@ -17,6 +17,7 @@ from .strategies import Strategy
 class PPOTrainer(Trainer):
     """
         Trainer for PPO algorithm.
+
     Args:
         strategy (Strategy): the strategy to use for training
         actor (Actor): the actor model in ppo algorithm
@@ -49,7 +50,6 @@ class PPOTrainer(Trainer):
                  actor_optim: Optimizer,
                  critic_optim: Optimizer,
                  kl_coef: float = 0.1,
-                 ptx_coef: float = 0.9,
                  train_batch_size: int = 8,
                  buffer_limit: int = 0,
                  buffer_cpu_offload: bool = True,
@@ -72,37 +72,24 @@ class PPOTrainer(Trainer):
 
         self.actor_loss_fn = PolicyLoss(eps_clip)
         self.critic_loss_fn = ValueLoss(value_clip)
-        self.ptx_loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
-        self.ptx_coef = ptx_coef
+
         self.actor_optim = actor_optim
         self.critic_optim = critic_optim
 
     def training_step(self, experience: Experience) -> Dict[str, float]:
         self.actor.train()
         self.critic.train()
-        # policy loss
+
         num_actions = experience.action_mask.size(1)
         action_log_probs = self.actor(experience.sequences, num_actions, attention_mask=experience.attention_mask)
         actor_loss = self.actor_loss_fn(action_log_probs,
                                         experience.action_log_probs,
                                         experience.advantages,
                                         action_mask=experience.action_mask)
-
-        # ptx loss
-        if self.ptx_coef != 0:
-            batch = next(iter(self.pretrain_dataloader))
-            ptx = batch['input_ids'].to(torch.cuda.current_device())
-            label = batch['labels'].to(torch.cuda.current_device())[:, 1:]
-            attention_mask = batch['attention_mask'].to(torch.cuda.current_device())
-            ptx_log_probs = self.actor.get_base_model()(ptx, attention_mask=attention_mask)['logits'][..., :-1, :]
-            ptx_loss = self.ptx_loss_fn(ptx_log_probs.view(-1, ptx_log_probs.size(-1)), label.view(-1))
-            actor_loss = ptx_loss * self.ptx_coef + actor_loss * (1 - self.ptx_coef)
-
         self.strategy.backward(actor_loss, self.actor, self.actor_optim)
         self.strategy.optimizer_step(self.actor_optim)
         self.actor_optim.zero_grad()
 
-        # value loss
         values = self.critic(experience.sequences,
                              action_mask=experience.action_mask,
                              attention_mask=experience.attention_mask)
@@ -114,8 +101,8 @@ class PPOTrainer(Trainer):
         self.strategy.optimizer_step(self.critic_optim)
         self.critic_optim.zero_grad()
 
-        return {'reward': experience.reward.mean().item()}
-    
+        return {'actor_loss': actor_loss.item(), 'critic_loss': critic_loss.item(), 'reward': experience.reward.mean().item()}
+
     def save_model(self, path: str, only_rank0: bool = False, tokenizer: Optional[PreTrainedTokenizerBase] = None) -> None:
         self.strategy.save_model(model=self.actor, path=path, only_rank0=only_rank0, tokenizer=tokenizer)
 
