@@ -7,7 +7,7 @@ import loralib as lora
 import torch
 import torch.distributed as dist
 # import wandb
-from coati.models.loss import GPTLMLoss
+from ..models.loss import GPTLMLoss
 from torch import nn
 from torch.optim import Adam, Optimizer
 from torch.optim.lr_scheduler import LambdaLR
