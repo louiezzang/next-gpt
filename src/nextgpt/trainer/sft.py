@@ -6,7 +6,7 @@ from typing import Optional
 import loralib as lora
 import torch
 import torch.distributed as dist
-import wandb
+# import wandb
 from coati.models.loss import GPTLMLoss
 from torch import nn
 from torch.optim import Adam, Optimizer
@@ -67,8 +67,8 @@ class SFTTrainer(ABC):
                                        num_training_steps=max_steps)
 
     def fit(self, logger, log_interval=10):
-        wandb.init(project="Coati", name=time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
-        wandb.watch(self.model)
+        # wandb.init(project="nextGPT", name=time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
+        # wandb.watch(self.model)
         total_loss = 0
         # epoch_bar = tqdm(range(self.epochs), desc='Epochs', disable=not is_rank_0())
         step_bar = tqdm(range(len(self.train_dataloader) // self.accimulation_steps * self.epochs),
@@ -94,7 +94,8 @@ class SFTTrainer(ABC):
                 prompt_logits = outputs.logits
 
                 if loss >= 2.5:
-                    logger.warning(f"batch_id:{batch_id}, abnormal loss: {loss}")
+                    # logger.warning(f"batch_id:{batch_id}, abnormal loss: {loss}")
+                    print(f"batch_id:{batch_id}, abnormal loss: {loss}")
 
                 loss = loss / self.accimulation_steps
 
@@ -107,14 +108,21 @@ class SFTTrainer(ABC):
                     self.strategy.optimizer_step(self.optimizer)
                     self.optimizer.zero_grad()
                     self.scheduler.step()
-                    wandb.log({
+                    # wandb.log({
+                    #     "loss": total_loss / self.accimulation_steps,
+                    #     "lr": self.scheduler.get_last_lr()[0],
+                    #     "epoch": epoch,
+                    #     "batch_id": batch_id
+                    # })
+                    step_bar.update()
+                    step_bar.set_postfix({
                         "loss": total_loss / self.accimulation_steps,
                         "lr": self.scheduler.get_last_lr()[0],
                         "epoch": epoch,
                         "batch_id": batch_id
                     })
                     total_loss = 0
-                    step_bar.update()
+                    # step_bar.update()
 
                 # if batch_id % log_interval == 0:
                 # logger.info(f'Train Epoch {epoch}/{self.epochs} Batch {batch_id} Rank {dist.get_rank()} loss {loss.item()}')
@@ -144,7 +152,8 @@ class SFTTrainer(ABC):
 
                     loss_mean = loss_sum / num_seen
                     if dist.get_rank() == 0:
-                        logger.info(f'Eval Epoch {epoch}/{self.epochs} loss {loss_mean}')
+                        # logger.info(f'Eval Epoch {epoch}/{self.epochs} loss {loss_mean}')
+                        step_bar.set_postfix({'epoch': dist, 'eval_loss': loss_mean})
 
             # epoch_bar.update()
 
