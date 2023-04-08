@@ -20,7 +20,6 @@ class RewardDataset(Dataset):
                  dataset, 
                  tokenizer: Callable, 
                  max_length: int,
-                 prompt_template=None,
                  prompt_field="prompt", 
                  chosen_field="chosen",
                  rejected_field="rejected",
@@ -29,11 +28,7 @@ class RewardDataset(Dataset):
         self.chosen = []
         self.reject = []
         for data in tqdm(dataset, disable=not is_rank_0()):
-            if prompt_template is not None:
-                prompt = prompt_template.format_map(data)
-            else:
-                prompt = data[prompt_field]
-
+            prompt = data[prompt_field]
             chosen = prompt + data[chosen_field] + "<|endoftext|>"
             chosen_token = tokenizer(chosen,
                                      max_length=max_length,
