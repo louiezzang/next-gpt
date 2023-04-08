@@ -11,7 +11,7 @@ from .base import Callback
 
 class SaveCheckpoint(Callback):
     """
-        The callback for saving checkpoint for chatgpt.
+        The callback for saving checkpoint for coati.
 
         Only support saving actor and critic model.
         A typical architecture of the saved checkpoint would be:
@@ -69,7 +69,7 @@ class SaveCheckpoint(Callback):
             # save optimizer
             if self.model_dict[model][1] is None:
                 continue
-            only_rank0 = True # only_rank0 = not isinstance(self.strategy, ColossalAIStrategy)
+            only_rank0 = not isinstance(self.strategy, ColossalAIStrategy)
             rank = 0 if is_rank_0() else dist.get_rank()
             optim_path = os.path.join(base_path, f'{model}-optim-rank-{rank}.pt')
             self.strategy.save_optimizer(optimizer=self.model_dict[model][1], path=optim_path, only_rank0=only_rank0)

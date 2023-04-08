@@ -104,7 +104,6 @@ def generate(model: nn.Module,
              update_model_kwargs_fn: Optional[Callable[[dict, Any], dict]] = None,
              **model_kwargs) -> torch.Tensor:
     """Generate token sequence. The returned sequence is input_ids + generated_tokens.
-
     Args:
         model (nn.Module): model
         input_ids (torch.Tensor): input sequence

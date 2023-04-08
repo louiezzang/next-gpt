@@ -9,7 +9,7 @@ from ...models.base import Actor, Critic, RewardModel
 from ...replay_buffer import ReplayBuffer
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
-# from transformers.tokenization_utils_base import PreTrainedTokenizerBase
+from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
 from .sampler import DistributedSampler
 
@@ -117,7 +117,7 @@ class Strategy(ABC):
                    model: nn.Module,
                    path: str,
                    only_rank0: bool = False,
-                   #tokenizer: Optional[PreTrainedTokenizerBase] = None
+                   tokenizer: Optional[PreTrainedTokenizerBase] = None
                    ) -> None:
         pass
 

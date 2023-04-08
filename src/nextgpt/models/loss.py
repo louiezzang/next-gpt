@@ -71,7 +71,6 @@ class ValueLoss(nn.Module):
 class PPOPtxActorLoss(nn.Module):
     """
     To Do:
-
     PPO-ptx Actor Loss
     """
 
@@ -92,18 +91,6 @@ class PPOPtxActorLoss(nn.Module):
         lm_loss = self.pretrain_loss_fn(lm_logits, lm_input_ids)
         return policy_loss + self.pretrain_coef * lm_loss
 
-
-# Deprecated
-# class PairWiseLoss(nn.Module):
-#     """
-#     Pairwise Loss for Reward Model
-#     """
-
-#     def forward(self, chosen_reward: torch.Tensor, reject_reward: torch.Tensor) -> torch.Tensor:
-#         probs = torch.sigmoid(chosen_reward - reject_reward)
-#         log_probs = torch.log(probs)
-#         loss = -log_probs.mean()
-#         return loss
 
 class LogSigLoss(nn.Module):
     """

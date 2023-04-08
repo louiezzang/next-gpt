@@ -16,7 +16,6 @@ from .utils import is_rank_0
 class Trainer(ABC):
     """
         Base class for rlhf trainers.
-
     Args:
         strategy (Strategy):the strategy to use for training
         experience_maker (ExperienceMaker): the experience maker to use for produce experience to fullfill replay buffer
@@ -95,9 +94,44 @@ class Trainer(ABC):
                     pbar.set_postfix(metrics)
                 self._on_learn_epoch_end(epoch)
 
-    def fit(self, prompts, num_episodes: int = 50000, max_timesteps: int = 500, update_timesteps: int = 5000) -> None:
+    # def fit(self, 
+    #         prompts, 
+    #         num_episodes: int = 50000, 
+    #         max_timesteps: int = 500, 
+    #         update_timesteps: int = 5000) -> None:
+    #     time = 0
+    #     sampler = self.strategy.setup_sampler(prompts)
+    #     self._on_fit_start()
+    #     for episode in range(num_episodes):
+    #         self._on_episode_start(episode)
+    #         for timestep in tqdm(range(max_timesteps),
+    #                              desc=f'Episode [{episode+1}/{num_episodes}]',
+    #                              disable=not is_rank_0()):
+    #             time += 1
+    #             rand_prompts = sampler.sample(self.experience_batch_size)
+    #             if self.tokenizer is not None:
+    #                 inputs = self.tokenizer(rand_prompts)
+    #             else:
+    #                 inputs = rand_prompts
+    #             self._on_make_experience_start()
+    #             experience = self._make_experience(inputs)
+    #             self._on_make_experience_end(experience)
+    #             self.replay_buffer.append(experience)
+    #             if time % update_timesteps == 0:
+    #                 self._learn()
+    #                 self.replay_buffer.clear()
+    #         self._on_episode_end(episode)
+    #     self._on_fit_end()
+
+    def fit(self,
+            prompt_dataloader,
+            pretrain_dataloader,
+            num_episodes: int = 50000,
+            max_timesteps: int = 500,
+            update_timesteps: int = 5000) -> None:
         time = 0
-        sampler = self.strategy.setup_sampler(prompts)
+        self.pretrain_dataloader = pretrain_dataloader
+        self.prompt_dataloader = prompt_dataloader
         self._on_fit_start()
         for episode in range(num_episodes):
             self._on_episode_start(episode)
@@ -105,16 +139,16 @@ class Trainer(ABC):
                                  desc=f'Episode [{episode+1}/{num_episodes}]',
                                  disable=not is_rank_0()):
                 time += 1
-                rand_prompts = sampler.sample(self.experience_batch_size)
-                if self.tokenizer is not None:
-                    inputs = self.tokenizer(rand_prompts)
-                else:
-                    inputs = rand_prompts
+                prompts = next(iter(self.prompt_dataloader))
                 self._on_make_experience_start()
-                experience = self._make_experience(inputs)
+                self.experience_maker.initial_model.to(torch.cuda.current_device())
+                self.experience_maker.reward_model.to(torch.cuda.current_device())
+                experience = self._make_experience(prompts)
                 self._on_make_experience_end(experience)
                 self.replay_buffer.append(experience)
                 if time % update_timesteps == 0:
+                    self.experience_maker.initial_model.to('cpu')
+                    self.experience_maker.reward_model.to('cpu')
                     self._learn()
                     self.replay_buffer.clear()
             self._on_episode_end(episode)

@@ -26,7 +26,7 @@ class RewardModelTrainer(ABC):
         valid_dataset (Dataset): the dataset to use for validation
         eval_dataset (Dataset): the dataset to use for evaluation
         batch_size (int, defaults to 1): the batch size while training
-        max_epochs (int, defaults to 1): the number of epochs to train
+        max_epochs (int, defaults to 2): the number of epochs to train
     """
 
     def __init__(
@@ -64,7 +64,6 @@ class RewardModelTrainer(ABC):
         dist = 0
         on = 0
         cnt = 0
-        # loss_sum = 0
         self.model.eval()
         with torch.no_grad():
             for chosen_ids, c_mask, reject_ids, r_mask in dataloader:
@@ -79,10 +78,7 @@ class RewardModelTrainer(ABC):
                     if chosen_reward[i] > reject_reward[i]:
                         on += 1
                 dist += (chosen_reward - reject_reward).mean().item()
-                # loss = self.loss_fn(chosen_reward, reject_reward)
-                # loss_sum += loss.item()
             dist_mean = dist / len(dataloader)
-            # loss_mean = loss_sum / len(dataloader)
             acc = on / cnt
         self.model.train()
         return dist_mean, acc
@@ -120,6 +116,7 @@ class RewardModelTrainer(ABC):
                                            columns=['step', 'loss', 'dist', 'acc'])
                         log.to_csv('log_%s.csv' % time, mode='a', header=False, index=False)
                 step_bar.update()
+                # step_bar.set_postfix({'dist': dist, 'acc': acc})
                 step_bar.set_postfix({'loss': loss.item(), 'dist': dist, 'acc': acc})
 
             # eval
@@ -134,7 +131,5 @@ class RewardModelTrainer(ABC):
     def save_model(self,
                    path: str,
                    only_rank0: bool = False,
-                   #tokenizer: Optional[PreTrainedTokenizerBase] = None
-                   ) -> None:
-        #self.strategy.save_model(model=self.model, path=path, only_rank0=only_rank0, tokenizer=tokenizer)
-        self.strategy.save_model(model=self.model, path=path, only_rank0=only_rank0)
+                   tokenizer: Optional[PreTrainedTokenizerBase] = None) -> None:
+        self.strategy.save_model(model=self.model, path=path, only_rank0=only_rank0, tokenizer=tokenizer)

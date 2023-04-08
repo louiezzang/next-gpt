@@ -1,16 +1,18 @@
 import os
 import random
+from typing import Optional
 
 import numpy as np
 import torch
 import torch.distributed as dist
 import torch.nn as nn
-from ...models.base import Actor
+from ...models.base import LM, Actor, RewardModel
 from ...models.lora import LoraLinear
 from ...replay_buffer import ReplayBuffer
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.optim import Optimizer
 from torch.utils.data import DataLoader
+from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
 from .base import Strategy
 from .naive import NaiveStrategy
@@ -35,7 +37,7 @@ class DDPStrategy(NaiveStrategy):
             port = int(os.environ['MASTER_PORT'])
         except KeyError as e:
             raise RuntimeError(
-                f"Could not find {e} in the torch environment, visit https://www.colossalai.org/ for more information on launching with torch"
+                f"Could not find {e} in the torch environment"
             )
         dist.init_process_group('nccl', init_method=f'tcp://[{host}]:{port}', world_size=world_size, rank=rank)
         self.set_seed(self.seed)
@@ -83,6 +85,33 @@ class DDPStrategy(NaiveStrategy):
         model = model.model.module
         state_dict = model.state_dict()
         torch.save(state_dict, path)
+
+    def save_model(self, model: nn.Module, path: str, only_rank0: bool = False, tokenizer: Optional[PreTrainedTokenizerBase] = None) -> None:
+        if only_rank0 and dist.get_rank() != 0:
+            return None
+        
+        for module in model.modules():
+            if isinstance(module, LoraLinear):
+                module.merge_weights = True
+                module.eval()
+        
+        if isinstance(model, RewardModel):
+            state_dict = model.state_dict()
+            if only_rank0 and dist.get_rank() != 0:
+                return
+            torch.save(state_dict, path)
+        else:
+            try:
+                if isinstance(model, LM):
+                    model = model.model
+                model.save_pretrained(path)
+                if tokenizer is not None:
+                    tokenizer.save_pretrained(path)
+            except AttributeError:
+                state_dict = model.state_dict()
+                if only_rank0 and dist.get_rank() != 0:
+                    return
+                torch.save(state_dict, path)
         
     def save_optimizer(self, optimizer: Optimizer, path: str, only_rank0: bool = False) -> None:
         if only_rank0 and dist.get_rank() != 0:

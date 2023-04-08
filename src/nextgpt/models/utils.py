@@ -12,7 +12,6 @@ def compute_approx_kl(log_probs: torch.Tensor,
     """
     Compute the approximate KL divergence between two distributions.
     Schulman blog: http://joschu.net/blog/kl-approx.html
-
     Args:
         log_probs: Log probabilities of the new distribution.
         log_probs_base: Log probabilities of the base distribution.
