@@ -86,10 +86,11 @@ def preprocess(
     sources: Sequence[str],
     targets: Sequence[str],
     tokenizer: transformers.PreTrainedTokenizer,
+    max_length: int,
 ) -> Dict:
     """Preprocess the data by tokenizing."""
     examples = [s + t for s, t in zip(sources, targets)]
-    examples_tokenized, sources_tokenized = [_tokenize_fn(strings, tokenizer) for strings in (examples, sources)]
+    examples_tokenized, sources_tokenized = [_tokenize_fn(strings, tokenizer, max_length) for strings in (examples, sources)]
     input_ids = examples_tokenized["input_ids"]
     labels = copy.deepcopy(input_ids)
     for label, source_len in zip(labels, sources_tokenized["input_ids_lens"]):
@@ -106,6 +107,7 @@ class SupervisedDataset(Dataset):
                  prompt_template: str = None,
                  completion_field: str = "output",
                  max_datasets_size: int = None,
+                 max_length: int = 512,
                  verbose: bool = False):
         super(SupervisedDataset, self).__init__()
         print("Loading data...")
@@ -133,7 +135,7 @@ class SupervisedDataset(Dataset):
             print((targets[0]))
 
         print("Tokenizing inputs... This may take some time...")
-        data_dict = preprocess(sources, targets, tokenizer)
+        data_dict = preprocess(sources, targets, tokenizer, max_length)
 
         self.input_ids = data_dict["input_ids"]
         self.labels = data_dict["labels"]
