@@ -13,13 +13,16 @@ from .utils import is_rank_0
 
 IGNORE_INDEX = -100
 PROMPT_DICT = {
-    "prompt_input":
-        ("Below is an instruction that describes a task, paired with an input that provides further context. "
+    "prompt_input": (
+        "Below is an instruction that describes a task, paired with an input that provides further context. "
          "Write a response that appropriately completes the request.\n\n"
-         "### Instruction:\n{instruction}\n\n### Input:\n{input}\n\n### Response:"),
-    "prompt_no_input": ("Below is an instruction that describes a task. "
-                        "Write a response that appropriately completes the request.\n\n"
-                        "### Instruction:\n{instruction}\n\n### Response:"),
+         "### Instruction:\n{instruction}\n\n### Input:\n{input}\n\n### Response:"
+    ),
+    "prompt_no_input": (
+        "Below is an instruction that describes a task. "
+        "Write a response that appropriately completes the request.\n\n"
+        "### Instruction:\n{instruction}\n\n### Response:"
+    ),
 }
 
 
@@ -120,7 +123,7 @@ class SupervisedDataset(Dataset):
             ]
         else:
             sources = [
-                prompt_input.format_map(example) if example.get("input", "") != "" else prompt_no_input.format_map(example)
+                prompt_input.format_map(example)
                 for example in dataset
             ]
         targets = [f"{example[completion_field]}{tokenizer.eos_token}" for example in dataset]
