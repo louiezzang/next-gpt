@@ -59,14 +59,14 @@ class SFTDataset(Dataset):
         return dict(input_ids=self.input_ids[idx], labels=self.labels[idx])
 
 
-def _tokenize_fn(strings: Sequence[str], tokenizer: transformers.PreTrainedTokenizer) -> Dict:
+def _tokenize_fn(strings: Sequence[str], tokenizer: transformers.PreTrainedTokenizer, max_length: int) -> Dict:
     """Tokenize a list of strings."""
     tokenized_list = [
         tokenizer(
             text,
             return_tensors="pt",
             padding="longest",
-            max_length=tokenizer.model_max_length,
+            max_length=max_length,
             truncation=True,
         ) for text in strings
     ]
