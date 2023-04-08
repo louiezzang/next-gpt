@@ -123,7 +123,7 @@ class SupervisedDataset(Dataset):
             ]
         else:
             sources = [
-                prompt_input.format_map(example)
+                prompt_template.format_map(example)
                 for example in dataset
             ]
         targets = [f"{example[completion_field]}{tokenizer.eos_token}" for example in dataset]
