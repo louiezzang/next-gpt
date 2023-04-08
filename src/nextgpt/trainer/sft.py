@@ -66,7 +66,7 @@ class SFTTrainer(ABC):
                                        num_warmup_steps=math.ceil(max_steps * 0.03),
                                        num_training_steps=max_steps)
 
-    def fit(self, logger, log_interval=10):
+    def fit(self, logger=None, log_interval=10, verbose=False):
         # wandb.init(project="nextGPT", name=time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
         # wandb.watch(self.model)
         total_loss = 0
@@ -95,7 +95,8 @@ class SFTTrainer(ABC):
 
                 if loss >= 2.5:
                     # logger.warning(f"batch_id:{batch_id}, abnormal loss: {loss}")
-                    print(f"batch_id:{batch_id}, abnormal loss: {loss}")
+                    if verbose:
+                        print(f"batch_id:{batch_id}, abnormal loss: {loss}")
 
                 loss = loss / self.accumulation_steps
 
