@@ -152,8 +152,11 @@ class SFTTrainer(ABC):
                         num_seen += prompt_ids.size(0)
 
                     loss_mean = loss_sum / num_seen
-                    if dist.get_rank() == 0:
-                        # logger.info(f'Eval Epoch {epoch}/{self.epochs} loss {loss_mean}')
+                    if dist.is_initialized():
+                        if dist.get_rank() == 0:
+                            # logger.info(f'Eval Epoch {epoch}/{self.epochs} loss {loss_mean}')
+                            step_bar.set_postfix({'epoch': dist, 'eval_loss': loss_mean})
+                    else:
                         step_bar.set_postfix({'epoch': dist, 'eval_loss': loss_mean})
 
             # epoch_bar.update()
