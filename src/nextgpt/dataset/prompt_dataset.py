@@ -29,7 +29,7 @@ class PromptDataset(Dataset):
             dataset = dataset[:max_datasets_size]
 
         for data_dict in dataset:
-            if prompt_text is None:
+            if prompt_template is None:
                 prompt_text = data_dict["instruction"]
             else:
                 prompt_text = prompt_template.format_map(data_dict)
