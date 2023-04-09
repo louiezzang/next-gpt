@@ -120,7 +120,7 @@ class SupervisedDataset(Dataset):
         if prompt_template is None:
             prompt_input, prompt_no_input = PROMPT_DICT["prompt_input"], PROMPT_DICT["prompt_no_input"]
             sources = [
-                prompt_template.format_map(example)
+                prompt_input.format_map(example) if example.get("input", "") != "" else prompt_no_input.format_map(example)
                 for example in dataset
             ]
         else:
