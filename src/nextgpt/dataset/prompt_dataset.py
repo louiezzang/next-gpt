@@ -9,7 +9,7 @@ import transformers
 from torch.utils.data import Dataset
 from tqdm import tqdm
 
-from .utils import is_rank_0, jload
+from .utils import is_rank_0
 
 
 class PromptDataset(Dataset):
