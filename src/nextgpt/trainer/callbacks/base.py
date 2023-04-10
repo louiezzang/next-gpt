@@ -37,3 +37,7 @@ class Callback(ABC):
 
     def on_learn_batch_end(self, metrics: dict, experience: Experience) -> None:
         pass
+
+    # Added
+    def on_log_metrics(self, metrics: dict, **kwargs) -> None:
+        pass

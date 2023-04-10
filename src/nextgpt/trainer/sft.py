@@ -1,7 +1,7 @@
 import math
 import time
 from abc import ABC
-from typing import Optional
+from typing import Optional, List
 
 import loralib as lora
 import torch
@@ -15,9 +15,10 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
-# from transformers.trainer import get_scheduler
+# from transformers.trainer import get_scheduler # This may cause pyarrow version issue due to the dependency of datasets lib!!!
 from transformers.optimization import get_scheduler
 
+from .callbacks import Callback
 from .strategies import Strategy
 from .utils import is_rank_0
 
@@ -46,12 +47,14 @@ class SFTTrainer(ABC):
         batch_size: int = 1,
         max_epochs: int = 2,
         accumulation_steps: int = 8,
+        callbacks: List[Callback] = [],
     ) -> None:
         super().__init__()
         self.strategy = strategy
         self.epochs = max_epochs
         self.train_dataloader = train_dataloader
         self.eval_dataloader = eval_dataloader
+        self.callbacks = callbacks
 
         self.model = strategy.setup_model(model)
         if "DDP" in str(self.strategy):
@@ -116,6 +119,12 @@ class SFTTrainer(ABC):
                     #     "epoch": epoch,
                     #     "batch_id": batch_id
                     # })
+                    if is_rank_0():
+                        global_step = (batch_id + 1) * (epoch + 1)
+                        self._on_log_metrics(
+                            metrics={"train_loss": total_loss / self.accumulation_steps},
+                            step=global_step
+                        )
                     step_bar.update()
                     step_bar.set_postfix({
                         "loss": total_loss / self.accumulation_steps,
@@ -156,6 +165,10 @@ class SFTTrainer(ABC):
                     step_bar.update()
                     if is_rank_0():
                         # logger.info(f'Eval Epoch {epoch}/{self.epochs} loss {loss_mean}')
+                        self._on_log_metrics(
+                            metrics={"eval_loss": loss_mean},
+                            epoch=epoch
+                        )
                         step_bar.set_postfix({'epoch': epoch, 'eval_loss': loss_mean})
 
             # epoch_bar.update()
@@ -165,3 +178,8 @@ class SFTTrainer(ABC):
                    only_rank0: bool = False,
                    tokenizer: Optional[PreTrainedTokenizerBase] = None) -> None:
         self.strategy.save_model(model=self.model, path=path, only_rank0=only_rank0, tokenizer=tokenizer)
+
+    def _on_log_metrics(self, metrics: dict, **kwargs) -> None:
+        for callback in self.callbacks:
+            if hasattr(callback, "on_log_metrics"):
+                callback.on_log_metrics(metrics, **kwargs)
