@@ -15,7 +15,8 @@ from torch.utils.data import DataLoader
 from torch.utils.data.distributed import DistributedSampler
 from tqdm import tqdm
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
-from transformers.trainer import get_scheduler
+# from transformers.trainer import get_scheduler
+from transformers.optimization import get_scheduler
 
 from .strategies import Strategy
 from .utils import is_rank_0
