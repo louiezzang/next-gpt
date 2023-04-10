@@ -1,30 +1,24 @@
-# next-gpt
----
+# nextGPT
+> 📢 Open source implementation for ChatGPT replica to build the end-to-end pipeline from SFT to RLHF.
+
+- 🔥 Step 1) SFT: Surpervised Fine-tuning
+- 🔥 Step 2) RM: Reward Model
+- 🔥 Step 3) PPO: Proximal Policy Optimization
 
 # Installation
+```
+$ pip install nextgpt
+```
+or
 ```
 $ git clone https://github.com/louiezzang/next-gpt.git
 $ cd next-gpt/
 $ pip install .
 $ cd ../
 ```
-or you can build the wheel file.
-```
-$ git clone https://github.com/louiezzang/next-gpt.git
-$ ./next-gpt/build.sh build_wheel
-$ ls ./next-gpt/dist/
-```
 
-# Development Environment (Optional)
-This is only for setting up your IDE development environment.
-```
-$ pipenv install --skip-lock -r requirements.txt 
-```
-To activate this project's virtualenv
-```
-$ pipenv shell
-```
-
+# Examples
+See [chatGPT example](https://github.com/louiezzang/next-gpt/blob/main/examples/chatgpt_example.ipynb)
 
 # RLHF
 What is [RLHF](https://gist.github.com/JoaoLages/c6f2dfd13d2484aa8bb0b2d567fbf093)?

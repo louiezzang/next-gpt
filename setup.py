@@ -23,19 +23,18 @@ dependency_links = [
 
 setup(
     name="nextgpt",
-    version="0.1.0",
+    version="0.0.1",
     description="nextGPT",
     long_description=open("README.md", "r", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
-    author="NextMining",
-    author_email="",
+    author="Younggue Bae",
+    # author_email="louiezzang@gmail.com",
     package_dir={"": "src"},
-    # url="https://github.com/louiezzang/next-gpt",
+    url="https://github.com/louiezzang/next-gpt",
     keywors=[
         "GPT",
-        "LLaMA",
         "ChatGPT",
-        "ChatLLaMA"
+        "LLaMA",
     ],
     packages=find_packages(where="src"),
     install_requires=[
