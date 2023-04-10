@@ -1,25 +1,21 @@
 """Builds the package.
 @author: Younggue Bae
 """
-from __future__ import print_function
 import os
 import sys
-
-import pkg_resources
 from setuptools import setup, find_packages
 
+here = os.path.dirname(os.path.realpath(__file__))
 
-if sys.version_info < (2, 7):
-    print("Python versions prior to 2.7 are not supported.",
-          file=sys.stderr)
-    exit(-1)
-
-setup_requires = [
-]
-
-dependency_links = [
-    # "https://download.pytorch.org/whl/nightly/cu116" # For PyTorch2.0
-]
+def read_file(filename: str):
+    try:
+        lines = []
+        with open(filename) as file:
+            lines = file.readlines()
+            lines = [line.rstrip() for line in lines if not line.startswith('#')]
+        return lines
+    except:
+        return []
 
 setup(
     name="nextgpt",
@@ -37,14 +33,7 @@ setup(
         "LLaMA",
     ],
     packages=find_packages(where="src"),
-    install_requires=[
-        str(r)
-        for r in pkg_resources.parse_requirements(
-            open(os.path.join(os.path.dirname(__file__), "requirements.txt"))
-        )
-    ],
+    install_requires=read_file(f"{here}/requirements.txt"),
+    python_requires=">=3.6",
     include_package_data=True,
-    # extras_require={'dev': ['pytest']},
-    setup_requires=setup_requires,
-    dependency_links=dependency_links,
 )
