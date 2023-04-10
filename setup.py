@@ -27,10 +27,10 @@ setup(
     description="nextGPT",
     long_description=open("README.md", "r", encoding="utf-8").read(),
     long_description_content_type="text/markdown",
-    author="Younggue Bae",
+    author="NextMining",
     author_email="",
     package_dir={"": "src"},
-    url="https://github.com/louiezzang/next-gpt",
+    # url="https://github.com/louiezzang/next-gpt",
     keywors=[
         "GPT",
         "LLaMA",
