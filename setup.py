@@ -22,15 +22,22 @@ dependency_links = [
 ]
 
 setup(
-    name="next-gpt",
-    py_modules=["next-gpt"],
-    version="1.0.0",
+    name="nextgpt",
+    version="0.1.0",
     description="nextGPT",
+    long_description=open("README.md", "r", encoding="utf-8").read(),
+    long_description_content_type="text/markdown",
     author="Younggue Bae",
     author_email="",
     package_dir={"": "src"},
+    url="https://github.com/louiezzang/next-gpt",
+    keywors=[
+        "GPT",
+        "LLaMA",
+        "ChatGPT",
+        "ChatLLaMA"
+    ],
     packages=find_packages(where="src"),
-    # install_requires=install_requires,
     install_requires=[
         str(r)
         for r in pkg_resources.parse_requirements(

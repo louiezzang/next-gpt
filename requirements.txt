@@ -4,5 +4,4 @@ datasets  # for huggingface datasets (if you want to download + preprocess OpenW
 tiktoken  # for OpenAI's fast BPE code
 loralib
 langchain
-# colossalai>=0.2.4
 # wandb  # for optional logging
