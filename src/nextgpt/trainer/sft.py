@@ -165,10 +165,6 @@ class SFTTrainer(ABC):
                     step_bar.update()
                     if is_rank_0():
                         # logger.info(f'Eval Epoch {epoch}/{self.epochs} loss {loss_mean}')
-                        self._on_log_metrics(
-                            metrics={"eval_loss": loss_mean},
-                            epoch=epoch
-                        )
                         step_bar.set_postfix({'epoch': epoch, 'eval_loss': loss_mean})
 
             # epoch_bar.update()
