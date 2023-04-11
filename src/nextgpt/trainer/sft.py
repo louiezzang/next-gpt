@@ -120,7 +120,7 @@ class SFTTrainer(ABC):
                     #     "batch_id": batch_id
                     # })
                     if is_rank_0():
-                        global_step = (batch_id + 1) * (epoch + 1)
+                        global_step = (batch_id + 1) + (epoch * len(self.train_dataloader))
                         self._on_log_metrics(
                             metrics={"train_loss": total_loss / self.accumulation_steps},
                             step=global_step
