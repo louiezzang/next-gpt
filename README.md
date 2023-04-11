@@ -33,6 +33,7 @@ The RLHF was forked and modified from these git repos.
 - https://github.com/airobotlab/KoChatGPT
 - https://github.com/airobotlab/KoChatGPT/tree/main/colossalai_ChatGPT_230319
 - https://github.com/hpcaitech/ColossalAI/tree/main/applications/Chat
+- https://github.com/juncongmoo/chatllama
 - https://github.com/huggingface/peft
 - https://github.com/dredwardhyde/gpt-neo-fine-tuning-example/blob/main/gpt_neo.py
 - https://github.com/databrickslabs/dolly

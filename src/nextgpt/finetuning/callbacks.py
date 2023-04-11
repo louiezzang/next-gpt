@@ -9,8 +9,9 @@ class LoggingCallback(TrainerCallback):
     A [`TrainerCallback`] that handles the custom logging by such as model logger.
     """
 
-    def __init__(self, logger):
+    def __init__(self, logger, verbose: bool = False):
         self.logger = logger
+        self.verbose = verbose
     
     def on_epoch_end(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
         """
@@ -31,13 +32,14 @@ class LoggingCallback(TrainerCallback):
         """
         Event called after an evaluation phase.
         """
-        print(f"*** on_evaluate: {state}")
+        if self.verbose:
+            print(f"*** on_evaluate: {state}")
 
     def on_save(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):
         """
         Event called after a checkpoint save.
         """
-        print(f"*** on_save: {state}")
+        # print(f"*** on_save: {state}")
         if self.logger:
             step = state.global_step
             log_history = state.log_history
@@ -48,7 +50,8 @@ class LoggingCallback(TrainerCallback):
                     log = x
                     break
             if hasattr(self.logger, "log_metrics") and log:
-                print(f"*** log metrics by model logger: {log}")
+                if self.verbose:
+                    print(f"*** log metrics by model logger: {log}")
                 metrics = {
                     "train_loss": log["loss"]
                 }
