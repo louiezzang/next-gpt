@@ -2,24 +2,26 @@ import math
 import time
 from abc import ABC
 from typing import Optional, List
+from tqdm import tqdm
+# import wandb
 
 import loralib as lora
 import torch
 import torch.distributed as dist
-# import wandb
-from ..models.loss import GPTLMLoss
+
 from torch import nn
-from torch.optim import Adam, Optimizer
+from torch.optim import Adam, AdamW, Optimizer
 from torch.optim.lr_scheduler import LambdaLR
-from torch.utils.data import DataLoader
+from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.distributed import DistributedSampler
-from tqdm import tqdm
+
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 # from transformers.trainer import get_scheduler # This may cause pyarrow version issue due to the dependency of datasets lib!!!
 from transformers.optimization import get_scheduler
 
+from ..models.loss import GPTLMLoss
 from .callbacks import Callback
-from .strategies import Strategy
+from .strategies import Strategy, DDPStrategy
 from .utils import is_rank_0
 
 
@@ -29,49 +31,117 @@ class SFTTrainer(ABC):
     Args:
         model (torch.nn.Module): the model to train
         strategy (Strategy): the strategy to use for training
-        optim(Optimizer): the optimizer to use for training
-        train_dataloader: the dataloader to use for training
-        eval_dataloader: the dataloader to use for evaluation
-        # batch_size (int, defaults to 1): the batch size while training
+        optim(Optimizer, defaults to null): the optimizer to use for training
+        train_dataset: the dataset to use for training
+        eval_dataset: the dataset to use for evaluation
+        data_collator: the data collator
+        batch_size (int, defaults to 1): the batch size while training
         max_epochs (int, defaults to 2): the number of epochs to train
         gradient_accumulation_steps (int, defaults to 8): the number of updates steps to accumulate the gradients for, before performing a backward/update pass
-        # optim_kwargs (dict, defaults to {'lr':1e-4}): the kwargs to use while initializing optimizer
-        lr_scheduler_type (str, defaults to cosine): the scheduler type to use (linear, cosine)
+        lr_scheduler_type (str, defaults to linear): the scheduler type to use ('linear', 'cosine')
     """
 
     def __init__(
         self,
         model,
         strategy: Strategy,
-        optim: Optimizer,
-        train_dataloader: DataLoader,
-        eval_dataloader: DataLoader = None,
-        # batch_size: int = 1,
+        train_dataset: Dataset,
+        eval_dataset: Dataset = None,
+        data_collator: any = None,
+        optim: Optimizer = None,
+        batch_size: int = 1,
         max_epochs: int = 2,
         gradient_accumulation_steps: int = 8,
-        lr_scheduler_type: str = "cosine",
+        lr: float = 5e-5,
+        lr_scheduler_type: str = "linear",
         callbacks: List[Callback] = [],
     ) -> None:
         super().__init__()
         self.strategy = strategy
         self.epochs = max_epochs
-        self.train_dataloader = train_dataloader
-        self.eval_dataloader = eval_dataloader
+        self.lr = lr
         self.callbacks = callbacks
+
+        self.train_dataloader = self.get_train_dataloader(dataset=train_dataset, batch_size=batch_size, data_collator=data_collator)
+        self.eval_dataloader = self.get_eval_dataloader(dataset=eval_dataset, batch_size=batch_size, data_collator=data_collator)
 
         self.model = strategy.setup_model(model)
         if "DDP" in str(self.strategy):
             self.model = self.model.module
+
+        if optim is None:
+            optim = self.get_optimizer()
         self.optimizer = strategy.setup_optimizer(optim, self.model)
 
         self.gradient_accumulation_steps = gradient_accumulation_steps
-        num_update_steps_per_epoch = len(train_dataloader) // self.gradient_accumulation_steps
+        num_update_steps_per_epoch = len(self.train_dataloader) // self.gradient_accumulation_steps
         max_steps = math.ceil(self.epochs * num_update_steps_per_epoch)
 
         self.scheduler = get_scheduler(lr_scheduler_type,
                                        self.optimizer,
                                        num_warmup_steps=math.ceil(max_steps * 0.03),
                                        num_training_steps=max_steps)
+        
+    def get_train_dataloader(self, dataset: Dataset, batch_size: int, data_collator) -> DataLoader:
+        if isinstance(self.strategy, DDPStrategy) and dist.is_initialized() and dist.get_world_size() > 1:
+            print("DDP mode")
+            train_sampler = DistributedSampler(dataset,
+                                               shuffle=True,
+                                               seed=42,
+                                               drop_last=True,
+                                               rank=dist.get_rank(),
+                                               num_replicas=dist.get_world_size())
+        else:
+            train_sampler = None
+
+        train_dataloader = DataLoader(dataset,
+                                      shuffle=(train_sampler is None),
+                                      sampler=train_sampler,
+                                      batch_size=batch_size,
+                                      collate_fn=data_collator,
+                                      pin_memory=True)
+
+        return train_dataloader
+
+    def get_eval_dataloader(self, dataset: Optional[Dataset], batch_size: int, data_collator) -> DataLoader:
+        if isinstance(self.strategy, DDPStrategy) and dist.is_initialized() and dist.get_world_size() > 1:
+            if dataset is not None:
+                eval_sampler = DistributedSampler(dataset,
+                                                  shuffle=False,
+                                                  seed=42,
+                                                  drop_last=False,
+                                                  rank=dist.get_rank(),
+                                                  num_replicas=dist.get_world_size())
+        else:
+            eval_sampler = None
+        
+        if dataset is not None:
+            eval_dataloader = DataLoader(dataset,
+                                         shuffle=(eval_sampler is None),
+                                         sampler=eval_sampler,
+                                         batch_size=batch_size,
+                                         collate_fn=data_collator,
+                                         pin_memory=True)
+        else:
+            eval_dataloader = None
+
+        return eval_dataloader
+    
+    def get_optimizer(self) -> Optimizer:
+        # optim = Adam(self.model.parameters(), lr=self.lr)
+
+        # TODO: Need to define as arguments.
+        # weight_decay (`float`, *optional*, defaults to 0): The weight decay to apply (if not zero) to all layers except all bias and LayerNorm weights.
+        # adam_beta1 (`float`, *optional*, defaults to 0.9): The beta1 hyperparameter for the [`AdamW`] optimizer.
+        # adam_beta2 (`float`, *optional*, defaults to 0.999): The beta2 hyperparameter for the [`AdamW`] optimizer.
+        # adam_epsilon (`float`, *optional*, defaults to 1e-8):The epsilon hyperparameter for the [`AdamW`] optimizer.
+        weight_decay = 0.0
+        adam_beta1 = 0.9
+        adam_beta2 = 0.999
+        adam_epsilon = 1e-8
+        optim = AdamW(self.model.parameters(), lr=self.lr, betas=(adam_beta1, adam_beta2), eps=adam_epsilon, weight_decay=weight_decay)
+
+        return optim
 
     def fit(self, logger=None, log_interval=10, verbose=False):
         # wandb.init(project="nextGPT", name=time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))
