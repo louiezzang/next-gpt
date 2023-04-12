@@ -27,7 +27,6 @@ class RewardModelTrainer(ABC):
         eval_dataset (Dataset): the dataset to use for evaluation
         batch_size (int, defaults to 1): the batch size while training
         max_epochs (int, defaults to 2): the number of epochs to train
-        optim(Optimizer, defaults to null): the optimizer to use for training
         loss_fn (str, defaults to 'log_sig'): the loss function name to use for training ('log_sig', 'log_exp')
         lr (float, defaults to 5e-5): the learning rate
     """
@@ -41,7 +40,6 @@ class RewardModelTrainer(ABC):
         eval_dataset: Dataset,
         batch_size: int = 1,
         max_epochs: int = 1,
-        optim: Optimizer = None,
         loss_fn: str = "log_sig",
         lr: float = 5e-5
     ) -> None:
@@ -65,8 +63,7 @@ class RewardModelTrainer(ABC):
             self.model = self.model.module
 
         self.loss_fn = self.get_loss_fn(loss_fn)
-        if optim is None:
-            optim = self.get_optimizer()
+        optim = self.get_optimizer()
         self.optimizer = strategy.setup_optimizer(optim, self.model)
         self.scheduler = lr_scheduler.CosineAnnealingLR(self.optimizer, self.train_dataloader.__len__() // 100)
 

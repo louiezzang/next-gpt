@@ -1,13 +1,14 @@
 from abc import ABC, abstractmethod
 from typing import Any, Callable, Dict, List, Optional, Union
-
-import torch
-from ..experience_maker import Experience, ExperienceMaker
-from ..replay_buffer import ReplayBuffer
-from torch import Tensor
-from torch.utils.data import DistributedSampler
 from tqdm import tqdm
 
+import torch
+from torch import Tensor
+from torch.utils.data import DataLoader
+from torch.utils.data.distributed import DistributedSampler
+
+from ..experience_maker import Experience, ExperienceMaker
+from ..replay_buffer import ReplayBuffer
 from .callbacks import Callback
 from .strategies import Strategy
 from .utils import is_rank_0
@@ -94,38 +95,9 @@ class Trainer(ABC):
                     pbar.set_postfix(metrics)
                 self._on_learn_epoch_end(epoch)
 
-    # def fit(self, 
-    #         prompts, 
-    #         num_episodes: int = 50000, 
-    #         max_timesteps: int = 500, 
-    #         update_timesteps: int = 5000) -> None:
-    #     time = 0
-    #     sampler = self.strategy.setup_sampler(prompts)
-    #     self._on_fit_start()
-    #     for episode in range(num_episodes):
-    #         self._on_episode_start(episode)
-    #         for timestep in tqdm(range(max_timesteps),
-    #                              desc=f'Episode [{episode+1}/{num_episodes}]',
-    #                              disable=not is_rank_0()):
-    #             time += 1
-    #             rand_prompts = sampler.sample(self.experience_batch_size)
-    #             if self.tokenizer is not None:
-    #                 inputs = self.tokenizer(rand_prompts)
-    #             else:
-    #                 inputs = rand_prompts
-    #             self._on_make_experience_start()
-    #             experience = self._make_experience(inputs)
-    #             self._on_make_experience_end(experience)
-    #             self.replay_buffer.append(experience)
-    #             if time % update_timesteps == 0:
-    #                 self._learn()
-    #                 self.replay_buffer.clear()
-    #         self._on_episode_end(episode)
-    #     self._on_fit_end()
-
     def fit(self,
-            prompt_dataloader,
-            pretrain_dataloader,
+            prompt_dataloader: DataLoader,
+            pretrain_dataloader: DataLoader,
             num_episodes: int = 50000,
             max_timesteps: int = 500,
             update_timesteps: int = 5000) -> None:

@@ -21,7 +21,7 @@ from transformers.optimization import get_scheduler
 
 from ..models.loss import GPTLMLoss
 from .callbacks import Callback
-from .strategies import Strategy, DDPStrategy
+from .strategies import Strategy
 from .utils import is_rank_0
 
 
@@ -34,7 +34,6 @@ class SFTTrainer(ABC):
         data_collator (DataCollator): the data collator
         train_dataset: the dataset to use for training
         eval_dataset: the dataset to use for evaluation
-        optim(Optimizer, defaults to null): the optimizer to use for training
         batch_size (int, defaults to 1): the batch size while training
         max_epochs (int, defaults to 2): the number of epochs to train
         gradient_accumulation_steps (int, defaults to 8): the number of updates steps to accumulate the gradients for, before performing a backward/update pass
@@ -50,7 +49,6 @@ class SFTTrainer(ABC):
         data_collator,
         train_dataset: Dataset,
         eval_dataset: Dataset = None,
-        optim: Optimizer = None,
         batch_size: int = 1,
         max_epochs: int = 2,
         gradient_accumulation_steps: int = 8,
@@ -71,8 +69,7 @@ class SFTTrainer(ABC):
         if "DDP" in str(self.strategy):
             self.model = self.model.module
 
-        if optim is None:
-            optim = self.get_optimizer()
+        optim = self.get_optimizer()
         self.optimizer = strategy.setup_optimizer(optim, self.model)
 
         self.gradient_accumulation_steps = gradient_accumulation_steps
@@ -85,7 +82,7 @@ class SFTTrainer(ABC):
                                        num_training_steps=max_steps)
         
     def get_train_dataloader(self, dataset: Dataset, batch_size: int, data_collator) -> DataLoader:
-        if isinstance(self.strategy, DDPStrategy) and dist.is_initialized() and dist.get_world_size() > 1:
+        if "DDP" in str(self.strategy) and dist.is_initialized() and dist.get_world_size() > 1:
             print("DDP mode")
             train_sampler = DistributedSampler(dataset,
                                                shuffle=True,
@@ -106,7 +103,7 @@ class SFTTrainer(ABC):
         return train_dataloader
 
     def get_eval_dataloader(self, dataset: Optional[Dataset], batch_size: int, data_collator) -> DataLoader:
-        if isinstance(self.strategy, DDPStrategy) and dist.is_initialized() and dist.get_world_size() > 1:
+        if "DDP" in str(self.strategy) and dist.is_initialized() and dist.get_world_size() > 1:
             if dataset is not None:
                 eval_sampler = DistributedSampler(dataset,
                                                   shuffle=False,

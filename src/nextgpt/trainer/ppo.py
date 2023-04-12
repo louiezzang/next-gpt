@@ -2,6 +2,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 import torch
 import torch.nn as nn
+from torch.optim import Adam, AdamW, Optimizer
 from ..experience_maker import Experience, NaiveExperienceMaker
 from ..models.base import Actor, Critic
 from ..models.generation_utils import update_model_kwargs_fn
@@ -23,10 +24,10 @@ class PPOTrainer(Trainer):
         strategy (Strategy): the strategy to use for training
         actor (Actor): the actor model in ppo algorithm
         critic (Critic): the critic model in ppo algorithm
+        actor_lr (float, defaults to 1e-7): the learning rate for actor
+        critic_lr (float, defaults to 1e-7): the learning rate for critic
         reward_model (nn.Module): the reward model in rlhf algorithm to make reward of sentences
         initial_model (Actor): the initial model in rlhf algorithm to generate reference logits to limit the update of actor
-        actor_optim (Optimizer): the optimizer to use for actor model
-        critic_optim (Optimizer): the optimizer to use for critic model
         kl_coef (float, defaults to 0.1): the coefficient of kl divergence loss
         train_batch_size (int, defaults to 8): the batch size to use for training
         buffer_limit (int, defaults to 0): the max_size limitaiton of replay buffer
@@ -36,7 +37,7 @@ class PPOTrainer(Trainer):
         value_clip (float, defaults to 0.4): the clip coefficient of value loss
         experience_batch_size (int, defaults to 8): the batch size to use for experience generation
         max_epochs (int, defaults to 1): the number of epochs of training process
-        tokenier (Callable, optional): the tokenizer to use for tokenizing the input
+        tokenizer (Callable, optional): the tokenizer to use for tokenizing the input
         sample_replay_buffer (bool, defaults to False): whether to sample from replay buffer
         dataloader_pin_memory (bool, defaults to True): whether to pin memory for data loader
         callbacks (List[Callback], defaults to []): the callbacks to call during training process
@@ -49,8 +50,8 @@ class PPOTrainer(Trainer):
                  critic: Critic,
                  reward_model: nn.Module,
                  initial_model: Actor,
-                 actor_optim: Optimizer,
-                 critic_optim: Optimizer,
+                 actor_lr: float = 1e-7,
+                 critic_lr: float = 1e-7,
                  kl_coef: float = 0.1,
                  ptx_coef: float = 0.9,
                  train_batch_size: int = 8,
@@ -66,21 +67,30 @@ class PPOTrainer(Trainer):
                  dataloader_pin_memory: bool = True,
                  callbacks: List[Callback] = [],
                  **generate_kwargs) -> None:
+        
+        # Configure optimizer.
+        actor_optim = Adam(actor.parameters(), lr=actor_lr)
+        critic_optim = Adam(critic.parameters(), lr=critic_lr)
+
+        # Setting the models.
+        (actor, actor_optim), (critic, critic_optim) = strategy.prepare((actor, actor_optim), (critic, critic_optim))
+
         experience_maker = NaiveExperienceMaker(actor, critic, reward_model, initial_model, kl_coef)
         replay_buffer = NaiveReplayBuffer(train_batch_size, buffer_limit, buffer_cpu_offload)
         generate_kwargs = _set_default_generate_kwargs(strategy, generate_kwargs, actor)
         super().__init__(strategy, experience_maker, replay_buffer, experience_batch_size, max_epochs, tokenizer,
                          sample_replay_buffer, dataloader_pin_memory, callbacks, **generate_kwargs)
+        
         self.actor = actor
         self.critic = critic
-
+        self.actor_optim = actor_optim
+        self.critic_optim = critic_optim
         self.actor_loss_fn = PolicyLoss(eps_clip)
         self.critic_loss_fn = ValueLoss(value_clip)
         self.vf_coef = vf_coef
         self.ptx_loss_fn = nn.CrossEntropyLoss(ignore_index=-100)
         self.ptx_coef = ptx_coef
-        self.actor_optim = actor_optim
-        self.critic_optim = critic_optim
+        
 
     def training_step(self, experience: Experience) -> Dict[str, float]:
         self.actor.train()
