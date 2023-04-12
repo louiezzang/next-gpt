@@ -14,8 +14,10 @@ class GPTActor(Actor):
         pretrained (str): Pretrained model name or path.
         config (GPT2Config): Model config.
         checkpoint (bool): Enable gradient checkpointing.
-        lora_rank (int): Rank of the LoRa layer.
+        lora_rank (int): Rank of the LoRa layer. 0 means LoRA is not applied. Defaults to 0.
         lora_train_bias (str): Bias training strategy for the LoRa layer.
+            'none' means it doesn't train biases. 'all' means it trains all biases. 'lora_only' means it only trains biases of LoRA layers.
+            Defaults to 'none'.
     """
 
     def __init__(self,

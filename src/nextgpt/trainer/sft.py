@@ -119,6 +119,12 @@ class SFTTrainer(ABC):
                     #     "epoch": epoch,
                     #     "batch_id": batch_id
                     # })
+                    if batch_id % log_interval == 0 and is_rank_0():
+                        global_step = (batch_id + 1) + (epoch * len(self.train_dataloader))
+                        self._on_log_metrics(
+                            metrics={"train_loss": total_loss / self.accumulation_steps},
+                            step=global_step
+                        )
                     
                     step_bar.update()
                     step_bar.set_postfix({
@@ -130,15 +136,9 @@ class SFTTrainer(ABC):
                     total_loss = 0
                     # step_bar.update()
 
-                if batch_id % log_interval == 0:
-                    # logger.info(f'Train Epoch {epoch}/{self.epochs} Batch {batch_id} Rank {dist.get_rank()} loss {loss.item()}')
-                    # wandb.log({"loss": loss.item()})
-                    if is_rank_0():
-                        global_step = (batch_id + 1) + (epoch * len(self.train_dataloader))
-                        self._on_log_metrics(
-                            metrics={"train_loss": loss.item()},
-                            step=global_step
-                        )
+                # if batch_id % log_interval == 0:
+                #     logger.info(f'Train Epoch {epoch}/{self.epochs} Batch {batch_id} Rank {dist.get_rank()} loss {loss.item()}')
+                #     wandb.log({"loss": loss.item()})
 
                 # process_bar.update()
 
