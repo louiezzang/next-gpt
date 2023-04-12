@@ -25,14 +25,14 @@ class GPTLM(LM):
                  lora_rank: int = 0,
                  lora_train_bias: str = 'none') -> None:
         if pretrained is not None:
-            # model = GPT2LMHeadModel.from_pretrained(pretrained)
-            model = AutoModelForCausalLM.from_pretrained(pretrained)
+            model = GPT2LMHeadModel.from_pretrained(pretrained)
+            # model = AutoModelForCausalLM.from_pretrained(pretrained)
         elif config is not None:
-            # model = GPT2LMHeadModel(config)
-            model = AutoModelForCausalLM(config)
+            model = GPT2LMHeadModel(config)
+            # model = AutoModelForCausalLM(config)
         else:
-            # model = GPT2LMHeadModel(GPT2Config())
-            model = AutoModelForCausalLM(GPT2Config())
+            model = GPT2LMHeadModel(GPT2Config())
+            # model = AutoModelForCausalLM(GPT2Config())
         if checkpoint:
             model.gradient_checkpointing_enable()
         super().__init__(model, lora_rank, lora_train_bias)
