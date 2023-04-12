@@ -38,7 +38,9 @@ class SFTTrainer(ABC):
         batch_size (int, defaults to 1): the batch size while training
         max_epochs (int, defaults to 2): the number of epochs to train
         gradient_accumulation_steps (int, defaults to 8): the number of updates steps to accumulate the gradients for, before performing a backward/update pass
+        lr (float, defaults to 5e-5): the learning rate
         lr_scheduler_type (str, defaults to linear): the scheduler type to use ('linear', 'cosine')
+        callbacks: a list of callbacks to customize the training loop.
     """
 
     def __init__(

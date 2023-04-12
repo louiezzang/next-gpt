@@ -4,13 +4,15 @@ from typing import Optional
 
 import pandas as pd
 import torch
+from torch import nn
 import torch.distributed as dist
-from torch.optim import Optimizer, lr_scheduler
+from torch.optim import Adam, AdamW, Optimizer, lr_scheduler
 from torch.utils.data import DataLoader, Dataset, DistributedSampler
 from tqdm import tqdm
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
 from .strategies import Strategy
+from ..models import LogExpLoss, LogSigLoss
 from .utils import is_rank_0
 
 
@@ -20,30 +22,33 @@ class RewardModelTrainer(ABC):
     Args:
         model (torch.nn.Module): the model to train
         strategy (Strategy): the strategy to use for training
-        optim(Optimizer): the optimizer to use for training
-        loss_fn (callable): the loss function to use for training
         train_dataset (Dataset): the dataset to use for training
         valid_dataset (Dataset): the dataset to use for validation
         eval_dataset (Dataset): the dataset to use for evaluation
         batch_size (int, defaults to 1): the batch size while training
         max_epochs (int, defaults to 2): the number of epochs to train
+        optim(Optimizer, defaults to null): the optimizer to use for training
+        loss_fn (str, defaults to 'log_sig'): the loss function name to use for training ('log_sig', 'log_exp')
+        lr (float, defaults to 5e-5): the learning rate
     """
 
     def __init__(
         self,
         model,
         strategy: Strategy,
-        optim: Optimizer,
-        loss_fn,
         train_dataset: Dataset,
         valid_dataset: Dataset,
         eval_dataset: Dataset,
         batch_size: int = 1,
         max_epochs: int = 1,
+        optim: Optimizer = None,
+        loss_fn: str = "log_sig",
+        lr: float = 5e-5
     ) -> None:
         super().__init__()
         self.strategy = strategy
         self.epochs = max_epochs
+        self.lr = lr
         train_sampler = None
 
         if dist.is_initialized() and dist.get_world_size() > 1:
@@ -56,10 +61,41 @@ class RewardModelTrainer(ABC):
         self.eval_dataloader = DataLoader(eval_dataset, batch_size=batch_size, shuffle=True)
 
         self.model = strategy.setup_model(model)
-        self.loss_fn = loss_fn
+        if "DDP" in str(self.strategy):
+            self.model = self.model.module
+
+        self.loss_fn = self.get_loss_fn(loss_fn)
+        if optim is None:
+            optim = self.get_optimizer()
         self.optimizer = strategy.setup_optimizer(optim, self.model)
         self.scheduler = lr_scheduler.CosineAnnealingLR(self.optimizer, self.train_dataloader.__len__() // 100)
 
+    def get_optimizer(self) -> Optimizer:
+        # optim = Adam(self.model.parameters(), lr=self.lr)
+
+        # TODO: Need to define as arguments.
+        # weight_decay (`float`, *optional*, defaults to 0): The weight decay to apply (if not zero) to all layers except all bias and LayerNorm weights.
+        # adam_beta1 (`float`, *optional*, defaults to 0.9): The beta1 hyperparameter for the [`AdamW`] optimizer.
+        # adam_beta2 (`float`, *optional*, defaults to 0.999): The beta2 hyperparameter for the [`AdamW`] optimizer.
+        # adam_epsilon (`float`, *optional*, defaults to 1e-8):The epsilon hyperparameter for the [`AdamW`] optimizer.
+        weight_decay = 0.0
+        adam_beta1 = 0.9
+        adam_beta2 = 0.999
+        adam_epsilon = 1e-8
+        optim = AdamW(self.model.parameters(), lr=self.lr, betas=(adam_beta1, adam_beta2), eps=adam_epsilon, weight_decay=weight_decay)
+
+        return optim
+    
+    def get_loss_fn(loss_fn_name: str) -> nn.Module:
+        if loss_fn_name == "log_sig":
+            loss_fn = LogSigLoss()
+        elif loss_fn_name == "log_exp":
+            loss_fn = LogExpLoss()
+        else:
+            raise ValueError(f"Unsupported loss function: {loss_fn_name}")
+
+        return loss_fn
+    
     def eval_acc(self, dataloader):
         dist = 0
         on = 0
