@@ -86,7 +86,7 @@ class RewardModelTrainer(ABC):
 
         return optim
     
-    def get_loss_fn(loss_fn_name: str) -> nn.Module:
+    def get_loss_fn(self, loss_fn_name: str) -> nn.Module:
         if loss_fn_name == "log_sig":
             loss_fn = LogSigLoss()
         elif loss_fn_name == "log_exp":
