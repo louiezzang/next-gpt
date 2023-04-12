@@ -34,7 +34,7 @@ class SFTTrainer(ABC):
         eval_dataloader: the dataloader to use for evaluation
         # batch_size (int, defaults to 1): the batch size while training
         max_epochs (int, defaults to 2): the number of epochs to train
-        accumulation_steps (int, defaults to 8): the number of accumulation steps
+        gradient_accumulation_steps (int, defaults to 8): the number of updates steps to accumulate the gradients for, before performing a backward/update pass
         # optim_kwargs (dict, defaults to {'lr':1e-4}): the kwargs to use while initializing optimizer
         lr_scheduler_type (str, defaults to cosine): the scheduler type to use (linear, cosine)
     """
@@ -48,7 +48,7 @@ class SFTTrainer(ABC):
         eval_dataloader: DataLoader = None,
         # batch_size: int = 1,
         max_epochs: int = 2,
-        accumulation_steps: int = 8,
+        gradient_accumulation_steps: int = 8,
         lr_scheduler_type: str = "cosine",
         callbacks: List[Callback] = [],
     ) -> None:
@@ -64,8 +64,8 @@ class SFTTrainer(ABC):
             self.model = self.model.module
         self.optimizer = strategy.setup_optimizer(optim, self.model)
 
-        self.accumulation_steps = accumulation_steps
-        num_update_steps_per_epoch = len(train_dataloader) // self.accumulation_steps
+        self.gradient_accumulation_steps = gradient_accumulation_steps
+        num_update_steps_per_epoch = len(train_dataloader) // self.gradient_accumulation_steps
         max_steps = math.ceil(self.epochs * num_update_steps_per_epoch)
 
         self.scheduler = get_scheduler(lr_scheduler_type,
@@ -78,7 +78,7 @@ class SFTTrainer(ABC):
         # wandb.watch(self.model)
         total_loss = 0
         # epoch_bar = tqdm(range(self.epochs), desc='Epochs', disable=not is_rank_0())
-        step_bar = tqdm(range(len(self.train_dataloader) // self.accumulation_steps * self.epochs),
+        step_bar = tqdm(range(len(self.train_dataloader) // self.gradient_accumulation_steps * self.epochs),
                         desc=f'steps',
                         disable=not is_rank_0())
         for epoch in range(self.epochs):
@@ -105,14 +105,14 @@ class SFTTrainer(ABC):
                     if verbose:
                         print(f"batch_id:{batch_id}, abnormal loss: {loss}")
 
-                loss = loss / self.accumulation_steps
+                loss = loss / self.gradient_accumulation_steps
 
                 self.strategy.backward(loss, self.model, self.optimizer)
 
                 total_loss += loss.item()
 
                 # gradient accumulation
-                if (batch_id + 1) % self.accumulation_steps == 0:
+                if (batch_id + 1) % self.gradient_accumulation_steps == 0:
                     self.strategy.optimizer_step(self.optimizer)
                     self.optimizer.zero_grad()
                     self.scheduler.step()
@@ -120,13 +120,13 @@ class SFTTrainer(ABC):
                     if is_rank_0():
                         global_step = (batch_id + 1) + (epoch * len(self.train_dataloader))
                         self._on_log_metrics(
-                            metrics={"train_loss": total_loss / self.accumulation_steps},
+                            metrics={"train_loss": total_loss / self.gradient_accumulation_steps},
                             step=global_step
                         )
                     
                     step_bar.update()
                     step_bar.set_postfix({
-                        "loss": total_loss / self.accumulation_steps,
+                        "loss": total_loss / self.gradient_accumulation_steps,
                         "lr": self.scheduler.get_last_lr()[0],
                         "epoch": epoch,
                         "batch_id": batch_id
