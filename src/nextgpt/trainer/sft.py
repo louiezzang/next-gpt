@@ -32,9 +32,11 @@ class SFTTrainer(ABC):
         optim(Optimizer): the optimizer to use for training
         train_dataloader: the dataloader to use for training
         eval_dataloader: the dataloader to use for evaluation
-        batch_size (int, defaults to 1): the batch size while training
+        # batch_size (int, defaults to 1): the batch size while training
         max_epochs (int, defaults to 2): the number of epochs to train
-        optim_kwargs (dict, defaults to {'lr':1e-4}): the kwargs to use while initializing optimizer
+        accumulation_steps (int, defaults to 8): the number of accumulation steps
+        # optim_kwargs (dict, defaults to {'lr':1e-4}): the kwargs to use while initializing optimizer
+        lr_scheduler_type (str, defaults to cosine): the scheduler type to use (linear, cosine)
     """
 
     def __init__(
@@ -44,9 +46,10 @@ class SFTTrainer(ABC):
         optim: Optimizer,
         train_dataloader: DataLoader,
         eval_dataloader: DataLoader = None,
-        batch_size: int = 1,
+        # batch_size: int = 1,
         max_epochs: int = 2,
         accumulation_steps: int = 8,
+        lr_scheduler_type: str = "cosine",
         callbacks: List[Callback] = [],
     ) -> None:
         super().__init__()
@@ -65,7 +68,7 @@ class SFTTrainer(ABC):
         num_update_steps_per_epoch = len(train_dataloader) // self.accumulation_steps
         max_steps = math.ceil(self.epochs * num_update_steps_per_epoch)
 
-        self.scheduler = get_scheduler("cosine",
+        self.scheduler = get_scheduler(lr_scheduler_type,
                                        self.optimizer,
                                        num_warmup_steps=math.ceil(max_steps * 0.03),
                                        num_training_steps=max_steps)
@@ -113,12 +116,7 @@ class SFTTrainer(ABC):
                     self.strategy.optimizer_step(self.optimizer)
                     self.optimizer.zero_grad()
                     self.scheduler.step()
-                    # wandb.log({
-                    #     "loss": total_loss / self.accumulation_steps,
-                    #     "lr": self.scheduler.get_last_lr()[0],
-                    #     "epoch": epoch,
-                    #     "batch_id": batch_id
-                    # })
+                    
                     if is_rank_0():
                         global_step = (batch_id + 1) + (epoch * len(self.train_dataloader))
                         self._on_log_metrics(
@@ -138,7 +136,6 @@ class SFTTrainer(ABC):
 
                 # if batch_id % log_interval == 0:
                 #     logger.info(f'Train Epoch {epoch}/{self.epochs} Batch {batch_id} Rank {dist.get_rank()} loss {loss.item()}')
-                #     wandb.log({"loss": loss.item()})
 
                 # process_bar.update()
 
