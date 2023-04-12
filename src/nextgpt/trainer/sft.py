@@ -31,10 +31,10 @@ class SFTTrainer(ABC):
     Args:
         model (torch.nn.Module): the model to train
         strategy (Strategy): the strategy to use for training
-        optim(Optimizer, defaults to null): the optimizer to use for training
+        data_collator (DataCollator): the data collator
         train_dataset: the dataset to use for training
         eval_dataset: the dataset to use for evaluation
-        data_collator: the data collator
+        optim(Optimizer, defaults to null): the optimizer to use for training
         batch_size (int, defaults to 1): the batch size while training
         max_epochs (int, defaults to 2): the number of epochs to train
         gradient_accumulation_steps (int, defaults to 8): the number of updates steps to accumulate the gradients for, before performing a backward/update pass
@@ -45,9 +45,9 @@ class SFTTrainer(ABC):
         self,
         model,
         strategy: Strategy,
+        data_collator,
         train_dataset: Dataset,
         eval_dataset: Dataset = None,
-        data_collator: any = None,
         optim: Optimizer = None,
         batch_size: int = 1,
         max_epochs: int = 2,
