@@ -3,13 +3,13 @@ from typing import Any, Callable, Dict, List, Optional
 import torch
 import torch.nn as nn
 from torch.optim import Adam, AdamW, Optimizer
+from transformers.tokenization_utils_base import PreTrainedTokenizerBase
+
 from ..experience_maker import Experience, NaiveExperienceMaker
 from ..models.base import Actor, Critic
 from ..models.generation_utils import update_model_kwargs_fn
 from ..models.loss import PolicyLoss, ValueLoss
 from ..replay_buffer import NaiveReplayBuffer
-from torch.optim import Optimizer
-from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
 from .base import Trainer
 from .callbacks import Callback
