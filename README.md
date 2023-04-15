@@ -5,11 +5,13 @@
 - 🔥 Step 2) RM: Reward Model
 - 🔥 Step 3) PPO: Proximal Policy Optimization
 
+![ChatGPT Diagram](https://openaicom.imgix.net/cf717bdb-0c8c-428a-b82b-3c3add87a600/ChatGPT_Diagram.svg?fm=auto&auto=compress,format&fit=min&w=1919&h=1138)
+
 # Installation
 ```
 $ pip install nextgpt
 ```
-or
+or install from the git repo to get always the latest version.
 ```
 $ git clone https://github.com/louiezzang/next-gpt.git
 $ cd next-gpt/
@@ -37,3 +39,4 @@ The RLHF was forked and modified from these git repos.
 - https://github.com/huggingface/peft
 - https://github.com/dredwardhyde/gpt-neo-fine-tuning-example/blob/main/gpt_neo.py
 - https://github.com/databrickslabs/dolly
+

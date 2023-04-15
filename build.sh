@@ -32,6 +32,13 @@ build_egg()
   cp "${latest_built_file}" "./dist/${latest_file_name}"
 }
 
+upload2pypi()
+{
+  rm -rf dist/*
+  python3 setup.py sdist
+  twine upload dist/*
+}
+
 CMD=$1
 shift
 $CMD $*
