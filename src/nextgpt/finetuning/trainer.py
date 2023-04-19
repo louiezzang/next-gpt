@@ -12,7 +12,7 @@ class SupervisedTrainer(Trainer):
     Trainer for supervised funtuning.
     """
     
-    def safe_save_model(self, output_dir: str, logger=None):
+    def safe_save_model(self, output_dir: str, logger=None, **kwargs):
         """ 
         Collects the state dict and dump to disk.
         """
@@ -27,7 +27,8 @@ class SupervisedTrainer(Trainer):
                 args_as_dict = asdict(self.args)
                 state_dict = {
                     "model_state_dict": cpu_state_dict,
-                    "model_args": args_as_dict
+                    "training_args": args_as_dict,
+                    "model_args": kwargs
                 }
                 logger.release_model(state_dict=state_dict)
 
