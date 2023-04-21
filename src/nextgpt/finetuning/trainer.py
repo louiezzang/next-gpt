@@ -9,7 +9,7 @@ from transformers import (
 
 class SupervisedTrainer(Trainer):
     """
-    Trainer for supervised funtuning.
+    Trainer for supervised finetuning.
     """
     
     def safe_save_model(self, output_dir: str, logger=None, **kwargs):
