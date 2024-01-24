@@ -26,6 +26,22 @@ class LoggingCallback(TrainerCallback):
         several inputs.
         """
         #print(f"*** on_step_end: {state}")
+        # if self.logger:
+        #     step = state.global_step
+        #     log_history = state.log_history
+
+        #     log = None
+        #     for x in log_history:
+        #         if x["step"] == step:
+        #             log = x
+        #             break
+        #     if hasattr(self.logger, "log_metrics") and log:
+        #         if self.verbose:
+        #             print(f"*** step-{step} log metrics by model logger: {log}")
+        #         metrics = {
+        #             "train_loss": log["loss"]
+        #         }
+        #         self.logger.log_metrics(metrics, step)
         pass
         
     def on_evaluate(self, args: TrainingArguments, state: TrainerState, control: TrainerControl, **kwargs):

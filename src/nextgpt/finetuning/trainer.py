@@ -31,5 +31,3 @@ class SupervisedTrainer(Trainer):
                     "model_args": kwargs
                 }
                 logger.release_model(state_dict=state_dict)
-
-

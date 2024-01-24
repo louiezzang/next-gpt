@@ -147,6 +147,8 @@ class SupervisedDataset(Dataset):
         return dict(input_ids=self.input_ids[i], labels=self.labels[i])
 
 
+# This looks same as DataCollatorForTokenClassification:
+# https://huggingface.co/docs/transformers/v4.37.1/en/main_classes/data_collator#transformers.DataCollatorForTokenClassification
 @dataclass
 class DataCollatorForSupervisedDataset(object):
     """Collate examples for supervised fine-tuning."""
